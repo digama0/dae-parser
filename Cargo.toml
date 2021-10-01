@@ -1,0 +1,15 @@
+[package]
+name = "dae-parser"
+version = "0.1.0"
+authors = ["Mario Carneiro <di.gama@gmail.com>"]
+edition = "2021"
+description = "Parser for the Collada (DAE) format"
+repository = "https://github.com/digama0/dae-parser"
+readme = "README.md"
+license = "MIT"
+keywords = ["collada", "3d", "format"]
+categories = ["parser implementations", "graphics", "game development"]
+
+[dependencies]
+minidom = "0.13"
+url = "2.2"
