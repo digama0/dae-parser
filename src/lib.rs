@@ -693,19 +693,65 @@ impl XNode for Controller {
 }
 
 #[derive(Debug)]
+pub enum AnnotType {
+    Bool(bool),
+    Bool2([bool; 2]),
+    Bool3([bool; 3]),
+    Bool4([bool; 4]),
+    Int(u32),
+    Int2([u32; 2]),
+    Int3(Box<[u32; 3]>),
+    Int4(Box<[u32; 4]>),
+    Float(f32),
+    Float2([f32; 2]),
+    Float3(Box<[f32; 3]>),
+    Float4(Box<[f32; 4]>),
+    Float2x2(Box<[f32; 2 * 2]>),
+    Float3x3(Box<[f32; 3 * 3]>),
+    Float4x4(Box<[f32; 4 * 4]>),
+    String(Box<str>),
+}
+
+impl AnnotType {
+    pub fn parse(e: &Element) -> Result<Option<Self>> {
+        Ok(Some(match e.name() {
+            "bool" => Self::Bool(parse_elem(e)?),
+            "bool2" => Self::Bool2(*parse_array_n(e)?),
+            "bool3" => Self::Bool3(*parse_array_n(e)?),
+            "bool4" => Self::Bool4(*parse_array_n(e)?),
+            "int" => Self::Int(parse_elem(e)?),
+            "int2" => Self::Int2(*parse_array_n(e)?),
+            "int3" => Self::Int3(parse_array_n(e)?),
+            "int4" => Self::Int4(parse_array_n(e)?),
+            "float" => Self::Float(parse_elem(e)?),
+            "float2" => Self::Float2(*parse_array_n(e)?),
+            "float3" => Self::Float3(parse_array_n(e)?),
+            "float4" => Self::Float4(parse_array_n(e)?),
+            "float2x2" => Self::Float2x2(parse_array_n(e)?),
+            "float3x3" => Self::Float3x3(parse_array_n(e)?),
+            "float4x4" => Self::Float4x4(parse_array_n(e)?),
+            "string" => Self::String(parse_text(e)?.into()),
+            _ => return Ok(None),
+        }))
+    }
+}
+
+#[derive(Debug)]
 pub struct Annotate {
-    // TODO
-    pub extra: Vec<Extra>,
+    pub name: String,
+    pub value: AnnotType,
 }
 
 impl XNode for Annotate {
     const NAME: &'static str = "annotate";
     fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
-        let it = element.children().peekable();
-        Ok(Annotate {
-            extra: Extra::parse_many(it)?,
-        })
+        let mut it = element.children().peekable();
+        let res = Annotate {
+            name: element.attr("name").ok_or("expecting name attr")?.into(),
+            value: parse_one_many(&mut it, AnnotType::parse)?,
+        };
+        finish(res, it)
     }
 }
 
@@ -913,12 +959,12 @@ pub enum ParamType {
 impl ParamType {
     pub fn parse(e: &Element) -> Result<Option<Self>> {
         Ok(Some(match e.name() {
-            "float" => ParamType::Float(parse_array_n::<_, 1>(e)?[0]),
-            "float2" => ParamType::Float2(*parse_array_n(e)?),
-            "float3" => ParamType::Float3(parse_array_n(e)?),
-            "float4" => ParamType::Float4(parse_array_n(e)?),
-            Surface::NAME => ParamType::Surface(Surface::parse_box(e)?),
-            Sampler2D::NAME => ParamType::Sampler2D(Sampler2D::parse_box(e)?),
+            "float" => Self::Float(parse_elem(e)?),
+            "float2" => Self::Float2(*parse_array_n(e)?),
+            "float3" => Self::Float3(parse_array_n(e)?),
+            "float4" => Self::Float4(parse_array_n(e)?),
+            Surface::NAME => Self::Surface(Surface::parse_box(e)?),
+            Sampler2D::NAME => Self::Sampler2D(Sampler2D::parse_box(e)?),
             _ => Self::Other(Box::new(e.clone())),
         }))
     }
@@ -1333,11 +1379,12 @@ impl XNode for Effect {
     }
 }
 
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub struct ForceField {
     pub id: Option<String>,
     pub name: Option<String>,
-    // TODO
+    pub asset: Option<Box<Asset>>,
+    pub technique: Vec<Technique>,
     pub extra: Vec<Extra>,
 }
 
@@ -1345,10 +1392,12 @@ impl XNode for ForceField {
     const NAME: &'static str = "force_field";
     fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
-        let it = element.children().peekable();
+        let mut it = element.children().peekable();
         Ok(ForceField {
             id: element.attr("id").map(Into::into),
             name: element.attr("name").map(Into::into),
+            asset: Asset::parse_opt_box(&mut it)?,
+            technique: Technique::parse_list(&mut it)?,
             extra: Extra::parse_many(it)?,
         })
     }
@@ -1566,7 +1615,7 @@ impl XNode for InputS {
     }
 }
 
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub struct InputList {
     pub inputs: Vec<InputS>,
     pub depth: usize,
@@ -1614,7 +1663,7 @@ impl XNode for Vertices {
     }
 }
 
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub struct Geom<T> {
     pub name: Option<String>,
     pub material: Option<String>,
@@ -1624,7 +1673,7 @@ pub struct Geom<T> {
     pub extra: Vec<Extra>,
 }
 
-pub trait ParseGeom: Sized {
+pub trait ParseGeom: Default {
     const NAME: &'static str;
     fn parse<'a>(it: &mut ElementIter<'a>) -> Result<Self>;
 
@@ -1651,7 +1700,7 @@ impl<T: ParseGeom> Geom<T> {
     pub const NAME: &'static str = T::NAME;
 }
 
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub struct LineGeom(pub Option<Box<[u32]>>);
 pub type Lines = Geom<LineGeom>;
 
@@ -1672,7 +1721,7 @@ impl ParseGeom for LineGeom {
     }
 }
 
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub struct LineStripGeom(pub Vec<Box<[u32]>>);
 pub type LineStrips = Geom<LineStripGeom>;
 
@@ -1700,7 +1749,7 @@ pub struct PolygonHole {
     pub hole: Vec<Box<[u32]>>,
 }
 
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub struct PolygonGeom(pub Vec<PolygonHole>);
 pub type Polygons = Geom<PolygonGeom>;
 
@@ -1741,7 +1790,7 @@ impl ParseGeom for PolygonGeom {
     }
 }
 
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub struct PolyListGeom {
     pub vcount: Option<Box<[u32]>>,
     pub prim: Option<Box<[u32]>>,
@@ -1789,7 +1838,7 @@ impl ParseGeom for PolyListGeom {
     }
 }
 
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub struct TriangleGeom(pub Option<Box<[u32]>>);
 pub type Triangles = Geom<TriangleGeom>;
 
@@ -1810,7 +1859,7 @@ impl ParseGeom for TriangleGeom {
     }
 }
 
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub struct TriFanGeom(pub Vec<Box<[u32]>>);
 pub type TriFans = Geom<TriFanGeom>;
 
@@ -1832,7 +1881,7 @@ impl ParseGeom for TriFanGeom {
     }
 }
 
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub struct TriStripGeom(pub Vec<Box<[u32]>>);
 pub type TriStrips = Geom<TriStripGeom>;
 
@@ -2089,10 +2138,116 @@ impl XNode for Image {
 }
 
 #[derive(Debug)]
+pub struct AmbientLight {
+    pub color: Box<[f32; 3]>,
+}
+
+impl XNode for AmbientLight {
+    const NAME: &'static str = "ambient";
+    fn parse(element: &Element) -> Result<Self> {
+        debug_assert_eq!(element.name(), Self::NAME);
+        let mut it = element.children().peekable();
+        let color = parse_one("color", &mut it, parse_array_n)?;
+        finish(AmbientLight { color }, it)
+    }
+}
+
+#[derive(Debug)]
+pub struct DirectionalLight {
+    pub color: Box<[f32; 3]>,
+}
+
+impl XNode for DirectionalLight {
+    const NAME: &'static str = "directional";
+    fn parse(element: &Element) -> Result<Self> {
+        debug_assert_eq!(element.name(), Self::NAME);
+        let mut it = element.children().peekable();
+        let color = parse_one("color", &mut it, parse_array_n)?;
+        finish(DirectionalLight { color }, it)
+    }
+}
+
+#[derive(Debug)]
+pub struct PointLight {
+    pub color: Box<[f32; 3]>,
+    pub constant_attenuation: f32,
+    pub linear_attenuation: f32,
+    pub quadratic_attenuation: f32,
+}
+
+impl XNode for PointLight {
+    const NAME: &'static str = "point";
+    fn parse(element: &Element) -> Result<Self> {
+        debug_assert_eq!(element.name(), Self::NAME);
+        let mut it = element.children().peekable();
+        let res = PointLight {
+            color: parse_one("color", &mut it, parse_array_n)?,
+            constant_attenuation: parse_opt("constant_attenuation", &mut it, parse_elem)?
+                .unwrap_or(0.),
+            linear_attenuation: parse_opt("linear_attenuation", &mut it, parse_elem)?.unwrap_or(0.),
+            quadratic_attenuation: parse_opt("quadratic_attenuation", &mut it, parse_elem)?
+                .unwrap_or(0.),
+        };
+        finish(res, it)
+    }
+}
+
+#[derive(Debug)]
+pub struct SpotLight {
+    pub color: Box<[f32; 3]>,
+    pub constant_attenuation: f32,
+    pub linear_attenuation: f32,
+    pub quadratic_attenuation: f32,
+    pub falloff_angle: f32,
+    pub falloff_exponent: f32,
+}
+
+impl XNode for SpotLight {
+    const NAME: &'static str = "spot";
+    fn parse(element: &Element) -> Result<Self> {
+        debug_assert_eq!(element.name(), Self::NAME);
+        let mut it = element.children().peekable();
+        let res = SpotLight {
+            color: parse_one("color", &mut it, parse_array_n)?,
+            constant_attenuation: parse_opt("constant_attenuation", &mut it, parse_elem)?
+                .unwrap_or(0.),
+            linear_attenuation: parse_opt("linear_attenuation", &mut it, parse_elem)?.unwrap_or(0.),
+            quadratic_attenuation: parse_opt("quadratic_attenuation", &mut it, parse_elem)?
+                .unwrap_or(0.),
+            falloff_angle: parse_opt("falloff_angle", &mut it, parse_elem)?.unwrap_or(180.),
+            falloff_exponent: parse_opt("falloff_exponent", &mut it, parse_elem)?.unwrap_or(0.),
+        };
+        finish(res, it)
+    }
+}
+
+#[derive(Debug)]
+pub enum LightKind {
+    Ambient(AmbientLight),
+    Directional(DirectionalLight),
+    Point(Box<PointLight>),
+    Spot(Box<SpotLight>),
+}
+
+impl LightKind {
+    pub fn parse(e: &Element) -> Result<Option<Self>> {
+        Ok(Some(match e.name() {
+            AmbientLight::NAME => Self::Ambient(AmbientLight::parse(e)?),
+            DirectionalLight::NAME => Self::Directional(DirectionalLight::parse(e)?),
+            PointLight::NAME => Self::Point(PointLight::parse_box(e)?),
+            SpotLight::NAME => Self::Spot(SpotLight::parse_box(e)?),
+            _ => return Ok(None),
+        }))
+    }
+}
+
+#[derive(Debug)]
 pub struct Light {
     pub id: Option<String>,
     pub name: Option<String>,
-    // TODO
+    pub asset: Option<Box<Asset>>,
+    pub kind: LightKind,
+    pub technique: Vec<Technique>,
     pub extra: Vec<Extra>,
 }
 
@@ -2100,10 +2255,16 @@ impl XNode for Light {
     const NAME: &'static str = "light";
     fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
-        let it = element.children().peekable();
+        let mut it = element.children().peekable();
         Ok(Light {
             id: element.attr("id").map(Into::into),
             name: element.attr("name").map(Into::into),
+            asset: Asset::parse_opt_box(&mut it)?,
+            kind: parse_one(Technique::COMMON, &mut it, |e| {
+                let mut it = e.children().peekable();
+                finish(parse_one_many(&mut it, LightKind::parse)?, it)
+            })?,
+            technique: Technique::parse_list(&mut it)?,
             extra: Extra::parse_many(it)?,
         })
     }
@@ -2137,6 +2298,7 @@ impl XNode for Material {
 pub struct PhysicsMaterial {
     pub id: Option<String>,
     pub name: Option<String>,
+    pub asset: Option<Box<Asset>>,
     // TODO
     pub extra: Vec<Extra>,
 }
@@ -2145,10 +2307,11 @@ impl XNode for PhysicsMaterial {
     const NAME: &'static str = "physics_material";
     fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
-        let it = element.children().peekable();
+        let mut it = element.children().peekable();
         Ok(PhysicsMaterial {
             id: element.attr("id").map(Into::into),
             name: element.attr("name").map(Into::into),
+            asset: Asset::parse_opt_box(&mut it)?,
             extra: Extra::parse_many(it)?,
         })
     }
@@ -2158,6 +2321,7 @@ impl XNode for PhysicsMaterial {
 pub struct PhysicsModel {
     pub id: Option<String>,
     pub name: Option<String>,
+    pub asset: Option<Box<Asset>>,
     // TODO
     pub extra: Vec<Extra>,
 }
@@ -2166,10 +2330,11 @@ impl XNode for PhysicsModel {
     const NAME: &'static str = "physics_model";
     fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
-        let it = element.children().peekable();
+        let mut it = element.children().peekable();
         Ok(PhysicsModel {
             id: element.attr("id").map(Into::into),
             name: element.attr("name").map(Into::into),
+            asset: Asset::parse_opt_box(&mut it)?,
             extra: Extra::parse_many(it)?,
         })
     }
@@ -2179,6 +2344,7 @@ impl XNode for PhysicsModel {
 pub struct PhysicsScene {
     pub id: Option<String>,
     pub name: Option<String>,
+    pub asset: Option<Box<Asset>>,
     // TODO
     pub extra: Vec<Extra>,
 }
@@ -2187,10 +2353,11 @@ impl XNode for PhysicsScene {
     const NAME: &'static str = "physics_scene";
     fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
-        let it = element.children().peekable();
+        let mut it = element.children().peekable();
         Ok(PhysicsScene {
             id: element.attr("id").map(Into::into),
             name: element.attr("name").map(Into::into),
+            asset: Asset::parse_opt_box(&mut it)?,
             extra: Extra::parse_many(it)?,
         })
     }
@@ -2492,6 +2659,7 @@ impl XNode for SetParam {
     }
 }
 
+/// `<technique>` (core)
 #[derive(Debug)]
 pub struct Technique {
     pub element: Element,
