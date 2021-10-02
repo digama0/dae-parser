@@ -2468,11 +2468,178 @@ impl RigidTransform {
 }
 
 #[derive(Debug)]
+pub struct Plane {
+    pub equation: [f32; 4],
+    pub extra: Vec<Extra>,
+}
+
+impl XNode for Plane {
+    const NAME: &'static str = "plane";
+    fn parse(element: &Element) -> Result<Self> {
+        debug_assert_eq!(element.name(), Self::NAME);
+        let mut it = element.children().peekable();
+        Ok(Plane {
+            equation: *parse_one("equation", &mut it, parse_array_n)?,
+            extra: Extra::parse_many(it)?,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct BoxShape {
+    pub half_extents: [f32; 3],
+    pub extra: Vec<Extra>,
+}
+
+impl XNode for BoxShape {
+    const NAME: &'static str = "box";
+    fn parse(element: &Element) -> Result<Self> {
+        debug_assert_eq!(element.name(), Self::NAME);
+        let mut it = element.children().peekable();
+        Ok(BoxShape {
+            half_extents: *parse_one("half_extents", &mut it, parse_array_n)?,
+            extra: Extra::parse_many(it)?,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct Sphere {
+    pub radius: f32,
+    pub extra: Vec<Extra>,
+}
+
+impl XNode for Sphere {
+    const NAME: &'static str = "sphere";
+    fn parse(element: &Element) -> Result<Self> {
+        debug_assert_eq!(element.name(), Self::NAME);
+        let mut it = element.children().peekable();
+        Ok(Sphere {
+            radius: parse_one("radius", &mut it, parse_elem)?,
+            extra: Extra::parse_many(it)?,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct Cylinder {
+    pub height: f32,
+    pub radius: f32,
+    pub extra: Vec<Extra>,
+}
+
+impl XNode for Cylinder {
+    const NAME: &'static str = "cylinder";
+    fn parse(element: &Element) -> Result<Self> {
+        debug_assert_eq!(element.name(), Self::NAME);
+        let mut it = element.children().peekable();
+        Ok(Cylinder {
+            height: parse_one("height", &mut it, parse_elem)?,
+            radius: parse_one("radius", &mut it, parse_elem)?,
+            extra: Extra::parse_many(it)?,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct TaperedCylinder {
+    pub height: f32,
+    pub radius1: f32,
+    pub radius2: f32,
+    pub extra: Vec<Extra>,
+}
+
+impl XNode for TaperedCylinder {
+    const NAME: &'static str = "tapered_cylinder";
+    fn parse(element: &Element) -> Result<Self> {
+        debug_assert_eq!(element.name(), Self::NAME);
+        let mut it = element.children().peekable();
+        Ok(TaperedCylinder {
+            height: parse_one("height", &mut it, parse_elem)?,
+            radius1: parse_one("radius1", &mut it, parse_elem)?,
+            radius2: parse_one("radius2", &mut it, parse_elem)?,
+            extra: Extra::parse_many(it)?,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct Capsule {
+    pub height: f32,
+    pub radius: f32,
+    pub extra: Vec<Extra>,
+}
+
+impl XNode for Capsule {
+    const NAME: &'static str = "capsule";
+    fn parse(element: &Element) -> Result<Self> {
+        debug_assert_eq!(element.name(), Self::NAME);
+        let mut it = element.children().peekable();
+        Ok(Capsule {
+            height: parse_one("height", &mut it, parse_elem)?,
+            radius: parse_one("radius", &mut it, parse_elem)?,
+            extra: Extra::parse_many(it)?,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct TaperedCapsule {
+    pub height: f32,
+    pub radius1: f32,
+    pub radius2: f32,
+    pub extra: Vec<Extra>,
+}
+
+impl XNode for TaperedCapsule {
+    const NAME: &'static str = "tapered_capsule";
+    fn parse(element: &Element) -> Result<Self> {
+        debug_assert_eq!(element.name(), Self::NAME);
+        let mut it = element.children().peekable();
+        Ok(TaperedCapsule {
+            height: parse_one("height", &mut it, parse_elem)?,
+            radius1: parse_one("radius1", &mut it, parse_elem)?,
+            radius2: parse_one("radius2", &mut it, parse_elem)?,
+            extra: Extra::parse_many(it)?,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub enum ShapeGeom {
+    Plane(Plane),
+    Box(BoxShape),
+    Sphere(Sphere),
+    Cylinder(Cylinder),
+    TaperedCylinder(TaperedCylinder),
+    Capsule(Capsule),
+    TaperedCapsule(TaperedCapsule),
+    Geom(Instance<Geometry>),
+}
+
+impl ShapeGeom {
+    pub fn parse(e: &Element) -> Result<Option<Self>> {
+        match e.name() {
+            Plane::NAME => Ok(Some(Self::Plane(Plane::parse(e)?))),
+            BoxShape::NAME => Ok(Some(Self::Box(BoxShape::parse(e)?))),
+            Sphere::NAME => Ok(Some(Self::Sphere(Sphere::parse(e)?))),
+            Cylinder::NAME => Ok(Some(Self::Cylinder(Cylinder::parse(e)?))),
+            TaperedCylinder::NAME => Ok(Some(Self::TaperedCylinder(TaperedCylinder::parse(e)?))),
+            Capsule::NAME => Ok(Some(Self::Capsule(Capsule::parse(e)?))),
+            TaperedCapsule::NAME => Ok(Some(Self::TaperedCapsule(TaperedCapsule::parse(e)?))),
+            Geometry::INSTANCE => Ok(Some(Self::Geom(Instance::parse(e)?))),
+            _ => Ok(None),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct Shape {
     pub hollow: Option<bool>,
     pub mass: Option<f32>,
     pub density: Option<f32>,
     pub physics_material: Option<Box<DefInstance<PhysicsMaterial>>>,
+    pub geom: ShapeGeom,
     pub transform: Vec<RigidTransform>,
     pub extra: Vec<Extra>,
 }
@@ -2488,6 +2655,7 @@ impl XNode for Shape {
             density: parse_opt("density", &mut it, parse_elem)?,
             physics_material: parse_opt_many(&mut it, DefInstance::parse)?.map(Box::new),
             transform: parse_list_many(&mut it, RigidTransform::parse)?,
+            geom: parse_one_many(&mut it, ShapeGeom::parse)?,
             extra: Extra::parse_many(it)?,
         })
     }
