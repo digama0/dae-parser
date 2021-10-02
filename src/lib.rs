@@ -1,13 +1,9 @@
 //! TODO:
 //! * `channel`
-//! * `joints`
 //! * `sampler`
-//! * `skin`
-//! * `v`
-//! * `vertex_weights`
 
 use minidom::{quick_xml, Element};
-use std::{io::BufRead, marker::PhantomData, str::FromStr};
+use std::{io::BufRead, ops::Deref, str::FromStr};
 use url::Url;
 
 type XReader<R> = quick_xml::Reader<R>;
@@ -36,6 +32,10 @@ impl From<String> for Error {
     }
 }
 
+type Result<T, E = Error> = std::result::Result<T, E>;
+
+type ElementIter<'a> = std::iter::Peekable<minidom::Children<'a>>;
+
 fn get_text(element: &Element) -> Option<&str> {
     let mut it = element.nodes();
     let text = match it.next() {
@@ -48,11 +48,11 @@ fn get_text(element: &Element) -> Option<&str> {
     Some(text)
 }
 
-fn parse_text(element: &Element) -> Result<String, Error> {
+fn parse_text(element: &Element) -> Result<String> {
     Ok(get_text(element).ok_or("expecting a text node")?.to_owned())
 }
 
-fn parse_array<T: FromStr>(e: &Element) -> Result<Box<[T]>, Error> {
+fn parse_array<T: FromStr>(e: &Element) -> Result<Box<[T]>> {
     get_text(e)
         .ok_or("expected text node")?
         .split_ascii_whitespace()
@@ -61,20 +61,20 @@ fn parse_array<T: FromStr>(e: &Element) -> Result<Box<[T]>, Error> {
         .map_err(|_| "parse error".into())
 }
 
-fn parse_array_n<T: FromStr, const N: usize>(element: &Element) -> Result<Box<[T; N]>, Error> {
+fn parse_array_n<T: FromStr, const N: usize>(element: &Element) -> Result<Box<[T; N]>> {
     Ok(parse_array(element)?
         .try_into()
         .map_err(|_| "unexpected number of elements")?)
 }
 
-fn parse_elem<T: FromStr>(e: &Element) -> Result<T, Error> {
+fn parse_elem<T: FromStr>(e: &Element) -> Result<T> {
     get_text(e)
         .ok_or("expected text node")?
         .parse()
         .map_err(|_| "parse error".into())
 }
 
-fn parse_attr<T: FromStr>(attr: Option<&str>) -> Result<Option<T>, Error> {
+fn parse_attr<T: FromStr>(attr: Option<&str>) -> Result<Option<T>> {
     Ok(match attr {
         None => None,
         Some(s) => Some(s.parse().map_err(|_| "parse failure")?),
@@ -84,8 +84,8 @@ fn parse_attr<T: FromStr>(attr: Option<&str>) -> Result<Option<T>, Error> {
 fn parse_one<'a, T>(
     name: &str,
     it: &mut impl Iterator<Item = &'a Element>,
-    f: impl FnOnce(&'a Element) -> Result<T, Error>,
-) -> Result<T, Error> {
+    f: impl FnOnce(&'a Element) -> Result<T>,
+) -> Result<T> {
     let e = it.next().ok_or_else(|| format!("expected <{}>", name))?;
     if e.name() != name {
         Err(format!("expected <{}>", name))?
@@ -95,17 +95,17 @@ fn parse_one<'a, T>(
 
 fn parse_one_many<'a, T>(
     it: &mut impl Iterator<Item = &'a Element>,
-    f: impl FnOnce(&'a Element) -> Result<Option<T>, Error>,
-) -> Result<T, Error> {
+    f: impl FnOnce(&'a Element) -> Result<Option<T>>,
+) -> Result<T> {
     let e = it.next().ok_or_else(|| "expected element")?;
     Ok(f(e)?.ok_or_else(|| "expected element")?)
 }
 
 fn parse_opt<'a, T>(
     name: &str,
-    it: &mut std::iter::Peekable<impl Iterator<Item = &'a Element>>,
-    f: impl FnOnce(&'a Element) -> Result<T, Error>,
-) -> Result<Option<T>, Error> {
+    it: &mut ElementIter<'a>,
+    f: impl FnOnce(&'a Element) -> Result<T>,
+) -> Result<Option<T>> {
     let mut res = None;
     if let Some(&e) = it.peek() {
         if e.name() == name {
@@ -117,9 +117,9 @@ fn parse_opt<'a, T>(
 }
 
 fn parse_opt_many<'a, T>(
-    it: &mut std::iter::Peekable<impl Iterator<Item = &'a Element>>,
-    f: impl FnOnce(&'a Element) -> Result<Option<T>, Error>,
-) -> Result<Option<T>, Error> {
+    it: &mut ElementIter<'a>,
+    f: impl FnOnce(&'a Element) -> Result<Option<T>>,
+) -> Result<Option<T>> {
     let res = match it.peek() {
         None => None,
         Some(&e) => f(e)?,
@@ -132,15 +132,15 @@ fn parse_opt_many<'a, T>(
 
 fn parse_list<'a, T>(
     name: &str,
-    it: &mut std::iter::Peekable<impl Iterator<Item = &'a Element>>,
-    mut f: impl FnMut(&'a Element) -> Result<T, Error>,
-) -> Result<Vec<T>, Error> {
+    it: &mut ElementIter<'a>,
+    mut f: impl FnMut(&'a Element) -> Result<T>,
+) -> Result<Vec<T>> {
     parse_list_many(it, |e| {
         Ok(if e.name() == name { Some(f(e)?) } else { None })
     })
 }
 
-fn finish<'a, T>(t: T, mut it: impl Iterator<Item = &'a Element>) -> Result<T, Error> {
+fn finish<'a, T>(t: T, mut it: impl Iterator<Item = &'a Element>) -> Result<T> {
     if let Some(e) = it.next() {
         Err(format!("unexpected node <{}>", e.name()))?
     }
@@ -148,9 +148,9 @@ fn finish<'a, T>(t: T, mut it: impl Iterator<Item = &'a Element>) -> Result<T, E
 }
 
 fn parse_list_many<'a, T>(
-    it: &mut std::iter::Peekable<impl Iterator<Item = &'a Element>>,
-    mut f: impl FnMut(&'a Element) -> Result<Option<T>, Error>,
-) -> Result<Vec<T>, Error> {
+    it: &mut ElementIter<'a>,
+    mut f: impl FnMut(&'a Element) -> Result<Option<T>>,
+) -> Result<Vec<T>> {
     let mut res = vec![];
     while let Some(&e) = it.peek() {
         match f(e)? {
@@ -164,31 +164,25 @@ fn parse_list_many<'a, T>(
 
 pub trait XNode: Sized {
     const NAME: &'static str;
-    fn parse(element: &Element) -> Result<Self, Error>;
+    fn parse(element: &Element) -> Result<Self>;
 
-    fn parse_box<'a>(element: &Element) -> Result<Box<Self>, Error> {
+    fn parse_box<'a>(element: &Element) -> Result<Box<Self>> {
         Self::parse(element).map(Box::new)
     }
 
-    fn parse_one<'a>(it: &mut impl Iterator<Item = &'a Element>) -> Result<Self, Error> {
+    fn parse_one<'a>(it: &mut impl Iterator<Item = &'a Element>) -> Result<Self> {
         parse_one(Self::NAME, it, Self::parse)
     }
 
-    fn parse_opt<'a>(
-        it: &mut std::iter::Peekable<impl Iterator<Item = &'a Element>>,
-    ) -> Result<Option<Self>, Error> {
+    fn parse_opt<'a>(it: &mut ElementIter<'a>) -> Result<Option<Self>> {
         parse_opt(Self::NAME, it, Self::parse)
     }
 
-    fn parse_opt_box<'a>(
-        it: &mut std::iter::Peekable<impl Iterator<Item = &'a Element>>,
-    ) -> Result<Option<Box<Self>>, Error> {
+    fn parse_opt_box<'a>(it: &mut ElementIter<'a>) -> Result<Option<Box<Self>>> {
         parse_opt(Self::NAME, it, Self::parse_box)
     }
 
-    fn parse_list<'a>(
-        it: &mut std::iter::Peekable<impl Iterator<Item = &'a Element>>,
-    ) -> Result<Vec<Self>, Error> {
+    fn parse_list<'a>(it: &mut ElementIter<'a>) -> Result<Vec<Self>> {
         parse_list(Self::NAME, it, Self::parse)
     }
 }
@@ -204,7 +198,7 @@ pub struct Extra {
 
 impl XNode for Extra {
     const NAME: &'static str = "extra";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
         let res = Extra {
@@ -219,7 +213,7 @@ impl XNode for Extra {
 }
 
 impl Extra {
-    fn parse_many<'a>(it: impl Iterator<Item = &'a Element>) -> Result<Vec<Extra>, Error> {
+    fn parse_many<'a>(it: impl Iterator<Item = &'a Element>) -> Result<Vec<Extra>> {
         let mut extras = vec![];
         for e in it {
             match e.name() {
@@ -242,7 +236,7 @@ pub struct Contributor {
 
 impl XNode for Contributor {
     const NAME: &'static str = "contributor";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
         let res = Contributor {
@@ -273,7 +267,7 @@ impl Default for Unit {
 
 impl XNode for Unit {
     const NAME: &'static str = "unit";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         Ok(Unit {
             name: element.attr("name").map(Into::into),
@@ -300,7 +294,7 @@ impl Default for UpAxis {
 
 impl XNode for UpAxis {
     const NAME: &'static str = "up_axis";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         Ok(match get_text(element) {
             Some("X_UP") => UpAxis::XUp,
@@ -327,7 +321,7 @@ pub struct Asset {
 impl XNode for Asset {
     const NAME: &'static str = "asset";
 
-    fn parse_box(element: &Element) -> Result<Box<Self>, Error> {
+    fn parse_box(element: &Element) -> Result<Box<Self>> {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
         let res = Box::new(Asset {
@@ -346,7 +340,7 @@ impl XNode for Asset {
         finish(res, it)
     }
 
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         Ok(*Self::parse_box(element)?)
     }
 }
@@ -365,7 +359,7 @@ pub struct Animation {
 
 impl XNode for Animation {
     const NAME: &'static str = "animation";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         Ok(Animation {
             id: element.attr("id").map(Into::into),
@@ -385,7 +379,7 @@ pub struct AnimationClip {
 
 impl XNode for AnimationClip {
     const NAME: &'static str = "animation_clip";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         Ok(AnimationClip {
             id: element.attr("id").map(Into::into),
@@ -405,7 +399,7 @@ pub struct Camera {
 
 impl XNode for Camera {
     const NAME: &'static str = "camera";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         Ok(Camera {
             id: element.attr("id").map(Into::into),
@@ -416,20 +410,149 @@ impl XNode for Camera {
 }
 
 #[derive(Debug)]
+pub struct Joints {
+    pub inputs: Vec<Input>,
+    pub extra: Vec<Extra>,
+}
+
+impl XNode for Joints {
+    const NAME: &'static str = "joints";
+    fn parse(element: &Element) -> Result<Self> {
+        debug_assert_eq!(element.name(), Self::NAME);
+        let mut it = element.children().peekable();
+        let res = Joints {
+            inputs: Input::parse_list(&mut it)?,
+            extra: Extra::parse_many(it)?,
+        };
+        if res.inputs.len() < 2 {
+            Err("joints: expected at least 2 inputs")?
+        }
+        Ok(res)
+    }
+}
+
+#[derive(Debug)]
+pub struct VertexWeights {
+    pub count: usize,
+    pub inputs: InputList,
+    pub vcount: Option<Box<[u32]>>,
+    pub prim: Option<Box<[u32]>>,
+    pub extra: Vec<Extra>,
+}
+
+impl XNode for VertexWeights {
+    const NAME: &'static str = "vertex_weights";
+    fn parse(element: &Element) -> Result<Self> {
+        debug_assert_eq!(element.name(), Self::NAME);
+        let mut it = element.children().peekable();
+        let res = VertexWeights {
+            count: parse_attr(element.attr("count"))?.ok_or("expected 'count' attr")?,
+            inputs: InputList::parse(&mut it)?,
+            vcount: parse_opt("vcount", &mut it, parse_array)?,
+            prim: parse_opt("v", &mut it, parse_array)?,
+            extra: Extra::parse_many(it)?,
+        };
+        if res.inputs.len() < 2 {
+            Err("vertex_weights: expected at least 2 inputs")?
+        }
+        if !res.inputs.iter().any(|i| i.semantic == Semantic::Joint) {
+            Err("vertex_weights: missing JOINT input")?
+        }
+        validate_vcount(
+            res.count,
+            res.inputs.depth,
+            res.vcount.as_deref(),
+            res.prim.as_deref(),
+        )?;
+        Ok(res)
+    }
+}
+
+#[derive(Debug)]
+pub struct Skin {
+    pub source: String,
+    pub bind_shape_matrix: Option<Box<[f32; 16]>>,
+    pub sources: Vec<Source>,
+    pub joints: Joints,
+    pub weights: VertexWeights,
+    // TODO
+    pub extra: Vec<Extra>,
+}
+
+impl XNode for Skin {
+    const NAME: &'static str = "skin";
+    fn parse(element: &Element) -> Result<Self> {
+        debug_assert_eq!(element.name(), Self::NAME);
+        let mut it = element.children().peekable();
+        let res = Skin {
+            source: element
+                .attr("source")
+                .ok_or("expecting source attr")?
+                .into(),
+            bind_shape_matrix: parse_opt("bind_shape_matrix", &mut it, parse_array_n)?,
+            sources: Source::parse_list(&mut it)?,
+            joints: Joints::parse_one(&mut it)?,
+            weights: VertexWeights::parse_one(&mut it)?,
+            extra: Extra::parse_many(it)?,
+        };
+        if res.sources.len() < 3 {
+            Err("expected at least 3 skin sources")?
+        }
+        Ok(res)
+    }
+}
+
+#[derive(Debug)]
+pub struct Morph {
+    // TODO
+    pub extra: Vec<Extra>,
+}
+
+impl XNode for Morph {
+    const NAME: &'static str = "morph";
+    fn parse(element: &Element) -> Result<Self> {
+        debug_assert_eq!(element.name(), Self::NAME);
+        Ok(Morph {
+            extra: Extra::parse_many(element.children())?,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub enum ControlElement {
+    Skin(Skin),
+    Morph(Morph),
+}
+
+impl ControlElement {
+    pub fn parse(e: &Element) -> Result<Option<Self>> {
+        match e.name() {
+            Skin::NAME => Ok(Some(Self::Skin(Skin::parse(e)?))),
+            Morph::NAME => Ok(Some(Self::Morph(Morph::parse(e)?))),
+            _ => Ok(None),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct Controller {
     pub id: Option<String>,
     pub name: Option<String>,
-    // TODO
+    pub asset: Option<Box<Asset>>,
+    pub element: ControlElement,
     pub extra: Vec<Extra>,
 }
 
 impl XNode for Controller {
     const NAME: &'static str = "controller";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
+        let mut it = element.children().peekable();
         Ok(Controller {
             id: element.attr("id").map(Into::into),
             name: element.attr("name").map(Into::into),
+            asset: Asset::parse_opt_box(&mut it)?,
+            element: parse_one_many(&mut it, ControlElement::parse)?,
             extra: Extra::parse_many(element.children())?,
         })
     }
@@ -443,7 +566,7 @@ pub struct Annotate {
 
 impl XNode for Annotate {
     const NAME: &'static str = "annotate";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         Ok(Annotate {
             extra: Extra::parse_many(element.children())?,
@@ -498,7 +621,7 @@ pub enum SurfaceInit {
 }
 
 impl SurfaceInit {
-    pub fn parse(element: &Element) -> Result<Option<Self>, Error> {
+    pub fn parse(element: &Element) -> Result<Option<Self>> {
         Ok(Some(match element.name() {
             "init_as_null" => Self::Null,
             "init_as_target" => Self::Target,
@@ -527,7 +650,7 @@ pub struct Surface {
 
 impl XNode for Surface {
     const NAME: &'static str = "surface";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
         Ok(Surface {
@@ -623,7 +746,7 @@ pub struct Sampler2D {
 
 impl XNode for Sampler2D {
     const NAME: &'static str = "sampler2D";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
         Ok(Sampler2D {
@@ -653,7 +776,7 @@ pub enum ParamType {
 }
 
 impl ParamType {
-    pub fn parse(e: &Element) -> Result<Option<Self>, Error> {
+    pub fn parse(e: &Element) -> Result<Option<Self>> {
         Ok(Some(match e.name() {
             "float" => ParamType::Float(parse_array_n::<_, 1>(e)?[0]),
             "float2" => ParamType::Float2(*parse_array_n(e)?),
@@ -677,7 +800,7 @@ pub struct NewParam {
 
 impl XNode for NewParam {
     const NAME: &'static str = "newparam";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
         let res = NewParam {
@@ -709,7 +832,7 @@ pub struct TechniqueFx<T> {
 
 impl<T: ProfileData> XNode for TechniqueFx<T> {
     const NAME: &'static str = "technique";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
         Ok(TechniqueFx {
@@ -723,16 +846,11 @@ impl<T: ProfileData> XNode for TechniqueFx<T> {
 }
 
 pub trait ProfileData: Sized {
-    fn parse<'a>(
-        it: &mut std::iter::Peekable<impl Iterator<Item = &'a Element>>,
-    ) -> Result<Self, Error>;
+    fn parse<'a>(it: &mut ElementIter<'a>) -> Result<Self>;
 }
 
 impl ImageParam {
-    fn parse_list<'a>(
-        allow_setparam: bool,
-        it: &mut std::iter::Peekable<impl Iterator<Item = &'a Element>>,
-    ) -> Result<Vec<Self>, Error> {
+    fn parse_list<'a>(allow_setparam: bool, it: &mut ElementIter<'a>) -> Result<Vec<Self>> {
         parse_list_many(it, |e| {
             Ok(Some(match e.name() {
                 Image::NAME => Self::Image(Image::parse(e)?),
@@ -753,7 +871,7 @@ pub struct Texture {
 
 impl XNode for Texture {
     const NAME: &'static str = "texture";
-    fn parse(e: &Element) -> Result<Self, Error> {
+    fn parse(e: &Element) -> Result<Self> {
         let mut it = e.children().peekable();
         let res = Texture {
             texture: e.attr("texture").ok_or("expected texture attr")?.into(),
@@ -771,7 +889,7 @@ pub enum ColorParam {
     Texture(Box<Texture>),
 }
 impl ColorParam {
-    pub fn parse(element: &Element) -> Result<Self, Error> {
+    pub fn parse(element: &Element) -> Result<Self> {
         let mut it = element.children().peekable();
         parse_one_many(&mut it, |e| {
             Ok(Some(match e.name() {
@@ -790,7 +908,7 @@ pub enum FloatParam {
     Param(Box<str>),
 }
 impl FloatParam {
-    pub fn parse(element: &Element) -> Result<Self, Error> {
+    pub fn parse(element: &Element) -> Result<Self> {
         let mut it = element.children().peekable();
         parse_one_many(&mut it, |e| {
             Ok(Some(match e.name() {
@@ -818,7 +936,7 @@ pub struct Blinn {
 
 impl XNode for Blinn {
     const NAME: &'static str = "blinn";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
         Ok(Blinn {
@@ -848,7 +966,7 @@ pub struct ConstantFx {
 
 impl XNode for ConstantFx {
     const NAME: &'static str = "constant";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
         Ok(ConstantFx {
@@ -876,7 +994,7 @@ pub struct Lambert {
 
 impl XNode for Lambert {
     const NAME: &'static str = "lambert";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
         Ok(Lambert {
@@ -908,7 +1026,7 @@ pub struct Phong {
 
 impl XNode for Phong {
     const NAME: &'static str = "phong";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
         Ok(Phong {
@@ -935,7 +1053,7 @@ pub enum Shader {
 }
 
 impl Shader {
-    pub fn parse(e: &Element) -> Result<Option<Self>, Error> {
+    pub fn parse(e: &Element) -> Result<Option<Self>> {
         Ok(Some(match e.name() {
             Blinn::NAME => Self::Blinn(Blinn::parse(e)?),
             ConstantFx::NAME => Self::Constant(ConstantFx::parse(e)?),
@@ -953,9 +1071,7 @@ pub struct CommonData {
 }
 
 impl ProfileData for CommonData {
-    fn parse<'a>(
-        it: &mut std::iter::Peekable<impl Iterator<Item = &'a Element>>,
-    ) -> Result<Self, Error> {
+    fn parse<'a>(it: &mut ElementIter<'a>) -> Result<Self> {
         Ok(CommonData {
             image_param: ImageParam::parse_list(false, it)?,
             shaders: parse_list_many(it, Shader::parse)?,
@@ -974,7 +1090,7 @@ pub struct ProfileCommon {
 
 impl XNode for ProfileCommon {
     const NAME: &'static str = "profile_COMMON";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
         let asset = Asset::parse_opt_box(&mut it)?;
@@ -1003,7 +1119,7 @@ pub struct ProfileCG(pub Element); // TODO
 
 impl XNode for ProfileCG {
     const NAME: &'static str = "profile_CG";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         Ok(ProfileCG(element.clone()))
     }
 }
@@ -1013,7 +1129,7 @@ pub struct ProfileGLES(pub Element); // TODO
 
 impl ProfileGLES {
     const NAME: &'static str = "profile_GLES";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         Ok(ProfileGLES(element.clone()))
     }
 }
@@ -1023,7 +1139,7 @@ pub struct ProfileGLSL(pub Element); // TODO
 
 impl ProfileGLSL {
     const NAME: &'static str = "profile_GLSL";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         Ok(ProfileGLSL(element.clone()))
     }
 }
@@ -1037,7 +1153,7 @@ pub enum Profile {
 }
 
 impl Profile {
-    pub fn parse(e: &Element) -> Result<Option<Self>, Error> {
+    pub fn parse(e: &Element) -> Result<Option<Self>> {
         Ok(Some(match e.name() {
             ProfileCommon::NAME => Self::Common(ProfileCommon::parse(e)?),
             ProfileCG::NAME => Self::CG(ProfileCG::parse(e)?),
@@ -1062,7 +1178,7 @@ pub struct Effect {
 
 impl XNode for Effect {
     const NAME: &'static str = "effect";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
         let res = Effect {
@@ -1092,7 +1208,7 @@ pub struct ForceField {
 
 impl XNode for ForceField {
     const NAME: &'static str = "force_field";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         Ok(ForceField {
             id: element.attr("id").map(Into::into),
@@ -1111,7 +1227,7 @@ pub enum ArrayElement {
     Int(Box<[u32]>),
 }
 
-fn parse_array_count<T: FromStr>(e: &Element) -> Result<Box<[T]>, Error> {
+fn parse_array_count<T: FromStr>(e: &Element) -> Result<Box<[T]>> {
     let count: usize = parse_attr(e.attr("count"))?.ok_or("expected 'count' attr")?;
     let mut vec = Vec::with_capacity(count);
     for s in get_text(e)
@@ -1127,7 +1243,7 @@ fn parse_array_count<T: FromStr>(e: &Element) -> Result<Box<[T]>, Error> {
 }
 
 impl ArrayElement {
-    pub fn parse(e: &Element) -> Result<Option<Self>, Error> {
+    pub fn parse(e: &Element) -> Result<Option<Self>> {
         Ok(Some(match e.name() {
             "IDREF_array" => Self::IdRef(parse_array_count(e)?),
             "Name_array" => Self::Name(parse_array_count(e)?),
@@ -1151,7 +1267,7 @@ pub struct Source {
 
 impl XNode for Source {
     const NAME: &'static str = "source";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
         let res = Source {
@@ -1180,7 +1296,7 @@ pub struct Accessor {
 
 impl XNode for Accessor {
     const NAME: &'static str = "accessor";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let src = element.attr("source").ok_or("missing source attr")?;
         let mut it = element.children().peekable();
@@ -1268,6 +1384,7 @@ mk_semantic! {
     Weight = "WEIGHT",
 }
 
+/// `<input>` (unshared)
 #[derive(Debug)]
 pub struct Input {
     pub semantic: Semantic,
@@ -1276,7 +1393,7 @@ pub struct Input {
 
 impl XNode for Input {
     const NAME: &'static str = "input";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let semantic = element.attr("semantic").ok_or("missing semantic attr")?;
         let src = element.attr("source").ok_or("missing source attr")?;
@@ -1294,9 +1411,16 @@ pub struct InputS {
     pub set: Option<u32>,
 }
 
+impl Deref for InputS {
+    type Target = Input;
+    fn deref(&self) -> &Self::Target {
+        &self.input
+    }
+}
+
 impl XNode for InputS {
     const NAME: &'static str = "input";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         Ok(InputS {
             input: Input::parse(element)?,
             offset: parse_attr(element.attr("offset"))?.ok_or("missing offset attr")?,
@@ -1308,21 +1432,26 @@ impl XNode for InputS {
 #[derive(Debug)]
 pub struct InputList {
     pub inputs: Vec<InputS>,
-    pub depth: u32,
+    pub depth: usize,
+}
+
+impl std::ops::Deref for InputList {
+    type Target = Vec<InputS>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inputs
+    }
 }
 
 impl InputList {
-    pub fn parse<'a>(
-        it: &mut std::iter::Peekable<impl Iterator<Item = &'a Element>>,
-    ) -> Result<Self, Error> {
+    pub fn parse<'a>(it: &mut ElementIter<'a>) -> Result<Self> {
         let inputs = InputS::parse_list(it)?;
-        let depth = inputs.iter().map(|i| i.offset).max().map_or(0, |n| n + 1);
+        let depth = inputs.iter().map(|i| i.offset).max().map_or(0, |n| n + 1) as usize;
         Ok(InputList { inputs, depth })
     }
 
     fn check_prim<const MIN: usize>(&self, data: &[u32]) -> bool {
-        let depth = self.depth as usize;
-        depth != 0 && data.len() < depth * MIN && data.len() % depth == 0
+        self.depth != 0 && data.len() < self.depth * MIN && data.len() % self.depth == 0
     }
 }
 
@@ -1336,7 +1465,7 @@ pub struct Vertices {
 
 impl XNode for Vertices {
     const NAME: &'static str = "vertices";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
         let res = Vertices {
@@ -1356,7 +1485,7 @@ impl XNode for Vertices {
 pub struct Geom<T> {
     pub name: Option<String>,
     pub material: Option<String>,
-    pub count: u32,
+    pub count: usize,
     pub inputs: InputList,
     pub data: T,
     pub extra: Vec<Extra>,
@@ -1364,15 +1493,13 @@ pub struct Geom<T> {
 
 pub trait ParseGeom: Sized {
     const NAME: &'static str;
-    fn parse<'a>(
-        it: &mut std::iter::Peekable<impl Iterator<Item = &'a Element>>,
-    ) -> Result<Self, Error>;
+    fn parse<'a>(it: &mut ElementIter<'a>) -> Result<Self>;
 
-    fn validate(_: &Geom<Self>) -> Result<(), Error> {
+    fn validate(_: &Geom<Self>) -> Result<()> {
         Ok(())
     }
 
-    fn parse_geom(element: &Element) -> Result<Geom<Self>, Error> {
+    fn parse_geom(element: &Element) -> Result<Geom<Self>> {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
         let res = Geom {
@@ -1398,15 +1525,13 @@ pub type Lines = Geom<LineGeom>;
 impl ParseGeom for LineGeom {
     const NAME: &'static str = "lines";
 
-    fn parse<'a>(
-        it: &mut std::iter::Peekable<impl Iterator<Item = &'a Element>>,
-    ) -> Result<Self, Error> {
+    fn parse<'a>(it: &mut ElementIter<'a>) -> Result<Self> {
         Ok(LineGeom(parse_opt("p", it, parse_array)?))
     }
 
-    fn validate(res: &Geom<Self>) -> Result<(), Error> {
+    fn validate(res: &Geom<Self>) -> Result<()> {
         if let Some(ref data) = res.data.0 {
-            if res.inputs.depth as usize * 2 * res.count as usize != data.len() {
+            if res.inputs.depth * 2 * res.count != data.len() {
                 Err("line count does not match <p> field")?
             }
         }
@@ -1421,14 +1546,12 @@ pub type LineStrips = Geom<LineStripGeom>;
 impl ParseGeom for LineStripGeom {
     const NAME: &'static str = "line_strips";
 
-    fn parse<'a>(
-        it: &mut std::iter::Peekable<impl Iterator<Item = &'a Element>>,
-    ) -> Result<Self, Error> {
+    fn parse<'a>(it: &mut ElementIter<'a>) -> Result<Self> {
         Ok(LineStripGeom(parse_list("p", it, parse_array)?))
     }
 
-    fn validate(res: &Geom<Self>) -> Result<(), Error> {
-        if res.count as usize != res.data.0.len() {
+    fn validate(res: &Geom<Self>) -> Result<()> {
+        if res.count != res.data.0.len() {
             Err("line strip count does not match <p> fields")?
         }
         if !res.data.0.iter().all(|p| res.inputs.check_prim::<2>(p)) {
@@ -1451,9 +1574,7 @@ pub type Polygons = Geom<PolygonGeom>;
 impl ParseGeom for PolygonGeom {
     const NAME: &'static str = "polygon";
 
-    fn parse<'a>(
-        it: &mut std::iter::Peekable<impl Iterator<Item = &'a Element>>,
-    ) -> Result<Self, Error> {
+    fn parse<'a>(it: &mut ElementIter<'a>) -> Result<Self> {
         let mut polys = parse_list("p", it, |e| {
             Ok(PolygonHole {
                 verts: parse_array(e)?,
@@ -1473,8 +1594,8 @@ impl ParseGeom for PolygonGeom {
         Ok(PolygonGeom(polys))
     }
 
-    fn validate(res: &Geom<Self>) -> Result<(), Error> {
-        if res.count as usize != res.data.0.len() {
+    fn validate(res: &Geom<Self>) -> Result<()> {
+        if res.count != res.data.0.len() {
             Err("polygon count does not match <p> fields")?
         }
         if !res.data.0.iter().all(|ph| {
@@ -1494,32 +1615,44 @@ pub struct PolyListGeom {
 }
 pub type PolyList = Geom<PolyListGeom>;
 
+fn validate_vcount(
+    count: usize,
+    depth: usize,
+    vcount: Option<&[u32]>,
+    prim: Option<&[u32]>,
+) -> Result<()> {
+    match (vcount, prim) {
+        (None, None) => {}
+        (Some(vcount), Some(data)) => {
+            if count != vcount.len() {
+                Err("count does not match <vcount> field")?
+            }
+            if depth * vcount.iter().sum::<u32>() as usize != data.len() {
+                Err("vcount does not match <p>/<v> field")?
+            }
+        }
+        _ => Err("<vcount> and <p>/<v> should be provided together")?,
+    }
+    Ok(())
+}
+
 impl ParseGeom for PolyListGeom {
     const NAME: &'static str = "polylist";
 
-    fn parse<'a>(
-        it: &mut std::iter::Peekable<impl Iterator<Item = &'a Element>>,
-    ) -> Result<Self, Error> {
+    fn parse<'a>(it: &mut ElementIter<'a>) -> Result<Self> {
         Ok(PolyListGeom {
             vcount: parse_opt("vcount", it, parse_array)?,
             prim: parse_opt("p", it, parse_array)?,
         })
     }
 
-    fn validate(res: &Geom<Self>) -> Result<(), Error> {
-        match (&res.data.vcount, &res.data.prim) {
-            (None, None) => {}
-            (Some(vcount), Some(data)) => {
-                if res.count as usize != vcount.len() {
-                    Err("polylist count does not match <vcount> field")?
-                }
-                if res.inputs.depth as usize * vcount.iter().sum::<u32>() as usize != data.len() {
-                    Err("polylist vcount does not match <p> field")?
-                }
-            }
-            _ => Err("polylist: <vcount> and <p> should be provided together")?,
-        }
-        Ok(())
+    fn validate(res: &Geom<Self>) -> Result<()> {
+        validate_vcount(
+            res.count,
+            res.inputs.depth,
+            res.data.vcount.as_deref(),
+            res.data.prim.as_deref(),
+        )
     }
 }
 
@@ -1530,15 +1663,13 @@ pub type Triangles = Geom<TriangleGeom>;
 impl ParseGeom for TriangleGeom {
     const NAME: &'static str = "triangles";
 
-    fn parse<'a>(
-        it: &mut std::iter::Peekable<impl Iterator<Item = &'a Element>>,
-    ) -> Result<Self, Error> {
+    fn parse<'a>(it: &mut ElementIter<'a>) -> Result<Self> {
         Ok(TriangleGeom(parse_opt("p", it, parse_array)?))
     }
 
-    fn validate(res: &Geom<Self>) -> Result<(), Error> {
+    fn validate(res: &Geom<Self>) -> Result<()> {
         if let Some(ref data) = res.data.0 {
-            if res.inputs.depth as usize * 3 * res.count as usize != data.len() {
+            if res.inputs.depth * 3 * res.count != data.len() {
                 Err("triangle count does not match <p> field")?
             }
         }
@@ -1553,14 +1684,12 @@ pub type TriFans = Geom<TriFanGeom>;
 impl ParseGeom for TriFanGeom {
     const NAME: &'static str = "trifans";
 
-    fn parse<'a>(
-        it: &mut std::iter::Peekable<impl Iterator<Item = &'a Element>>,
-    ) -> Result<Self, Error> {
+    fn parse<'a>(it: &mut ElementIter<'a>) -> Result<Self> {
         Ok(TriFanGeom(parse_list("p", it, parse_array)?))
     }
 
-    fn validate(res: &Geom<Self>) -> Result<(), Error> {
-        if res.count as usize != res.data.0.len() {
+    fn validate(res: &Geom<Self>) -> Result<()> {
+        if res.count != res.data.0.len() {
             Err("triangle fan count does not match <p> fields")?
         }
         if !res.data.0.iter().all(|p| res.inputs.check_prim::<3>(p)) {
@@ -1577,14 +1706,12 @@ pub type TriStrips = Geom<TriStripGeom>;
 impl ParseGeom for TriStripGeom {
     const NAME: &'static str = "tristrips";
 
-    fn parse<'a>(
-        it: &mut std::iter::Peekable<impl Iterator<Item = &'a Element>>,
-    ) -> Result<Self, Error> {
+    fn parse<'a>(it: &mut ElementIter<'a>) -> Result<Self> {
         Ok(TriStripGeom(parse_list("p", it, parse_array)?))
     }
 
-    fn validate(res: &Geom<Self>) -> Result<(), Error> {
-        if res.count as usize != res.data.0.len() {
+    fn validate(res: &Geom<Self>) -> Result<()> {
+        if res.count != res.data.0.len() {
             Err("triangle strip count does not match <p> fields")?
         }
         if !res.data.0.iter().all(|p| res.inputs.check_prim::<3>(p)) {
@@ -1606,7 +1733,7 @@ pub enum Primitive {
 }
 
 impl Primitive {
-    pub fn parse(e: &Element) -> Result<Option<Self>, Error> {
+    pub fn parse(e: &Element) -> Result<Option<Self>> {
         Ok(Some(match e.name() {
             LineGeom::NAME => Primitive::Lines(LineGeom::parse_geom(e)?),
             LineStripGeom::NAME => Primitive::LineStrips(LineStripGeom::parse_geom(e)?),
@@ -1630,7 +1757,7 @@ pub struct ConvexMesh {
 
 impl ConvexMesh {
     pub const NAME: &'static str = "convex_mesh";
-    pub fn parse(element: &Element) -> Result<GeometryElement, Error> {
+    pub fn parse(element: &Element) -> Result<GeometryElement> {
         debug_assert_eq!(element.name(), Self::NAME);
         if let Some(s) = element.attr("convex_hull_of") {
             return Ok(GeometryElement::ConvexHullOf(
@@ -1651,7 +1778,7 @@ pub struct Mesh {
 }
 
 impl Mesh {
-    pub fn parse(convex: bool, element: &Element) -> Result<Self, Error> {
+    pub fn parse(convex: bool, element: &Element) -> Result<Self> {
         debug_assert_eq!(
             element.name(),
             if convex { ConvexMesh::NAME } else { Self::NAME }
@@ -1673,7 +1800,7 @@ impl Mesh {
 
 impl XNode for Mesh {
     const NAME: &'static str = "mesh";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         Self::parse(false, element)
     }
 }
@@ -1686,7 +1813,7 @@ pub struct ControlVertices {
 
 impl XNode for ControlVertices {
     const NAME: &'static str = "control_vertices";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
         let res = ControlVertices {
@@ -1710,7 +1837,7 @@ pub struct Spline {
 
 impl XNode for Spline {
     const NAME: &'static str = "spline";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
         let res = Spline {
@@ -1734,7 +1861,7 @@ pub enum GeometryElement {
 }
 
 impl GeometryElement {
-    pub fn parse(element: &Element) -> Result<Option<Self>, Error> {
+    pub fn parse(element: &Element) -> Result<Option<Self>> {
         Ok(Some(match element.name() {
             ConvexMesh::NAME => ConvexMesh::parse(element)?,
             Mesh::NAME => GeometryElement::Mesh(Mesh::parse(false, element)?),
@@ -1755,7 +1882,7 @@ pub struct Geometry {
 
 impl XNode for Geometry {
     const NAME: &'static str = "geometry";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
         Ok(Geometry {
@@ -1796,7 +1923,7 @@ fn parse_hex_array(s: &str) -> Box<[u8]> {
 }
 
 impl ImageSource {
-    pub fn parse(element: &Element) -> Result<Option<Self>, Error> {
+    pub fn parse(element: &Element) -> Result<Option<Self>> {
         Ok(Some(match element.name() {
             "data" => {
                 let s = get_text(element).ok_or("expected text element")?;
@@ -1823,7 +1950,7 @@ pub struct Image {
 
 impl XNode for Image {
     const NAME: &'static str = "image";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
         Ok(Image {
@@ -1850,7 +1977,7 @@ pub struct Light {
 
 impl XNode for Light {
     const NAME: &'static str = "light";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         Ok(Light {
             id: element.attr("id").map(Into::into),
@@ -1865,20 +1992,20 @@ pub struct Material {
     pub id: Option<String>,
     pub name: Option<String>,
     pub asset: Option<Box<Asset>>,
-    pub instance_effect: InstanceEffect,
+    pub instance_effect: Instance<Effect>,
     pub extra: Vec<Extra>,
 }
 
 impl XNode for Material {
     const NAME: &'static str = "material";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
         Ok(Material {
             id: element.attr("id").map(Into::into),
             name: element.attr("name").map(Into::into),
             asset: Asset::parse_opt_box(&mut it)?,
-            instance_effect: InstanceEffect::parse_one(&mut it)?,
+            instance_effect: Instance::parse_one(&mut it)?,
             extra: Extra::parse_many(it)?,
         })
     }
@@ -1894,7 +2021,7 @@ pub struct PhysicsMaterial {
 
 impl XNode for PhysicsMaterial {
     const NAME: &'static str = "physics_material";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         Ok(PhysicsMaterial {
             id: element.attr("id").map(Into::into),
@@ -1914,7 +2041,7 @@ pub struct PhysicsModel {
 
 impl XNode for PhysicsModel {
     const NAME: &'static str = "physics_model";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         Ok(PhysicsModel {
             id: element.attr("id").map(Into::into),
@@ -1934,7 +2061,7 @@ pub struct PhysicsScene {
 
 impl XNode for PhysicsScene {
     const NAME: &'static str = "physics_scene";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         Ok(PhysicsScene {
             id: element.attr("id").map(Into::into),
@@ -1949,7 +2076,7 @@ pub struct LookAt(pub Box<[f32; 9]>);
 
 impl XNode for LookAt {
     const NAME: &'static str = "lookat";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         Ok(LookAt(parse_array_n(element)?))
     }
@@ -1960,7 +2087,7 @@ pub struct Matrix(pub Box<[f32; 16]>);
 
 impl XNode for Matrix {
     const NAME: &'static str = "matrix";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         Ok(Matrix(parse_array_n(element)?))
     }
@@ -1971,7 +2098,7 @@ pub struct Rotate(pub Box<[f32; 4]>);
 
 impl XNode for Rotate {
     const NAME: &'static str = "Rotate";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         Ok(Rotate(parse_array_n(element)?))
     }
@@ -1982,7 +2109,7 @@ pub struct Scale(pub Box<[f32; 3]>);
 
 impl XNode for Scale {
     const NAME: &'static str = "scale";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         Ok(Scale(parse_array_n(element)?))
     }
@@ -1993,7 +2120,7 @@ pub struct Skew(pub Box<[f32; 7]>);
 
 impl XNode for Skew {
     const NAME: &'static str = "skew";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         Ok(Skew(parse_array_n(element)?))
     }
@@ -2004,7 +2131,7 @@ pub struct Translate(pub Box<[f32; 3]>);
 
 impl XNode for Translate {
     const NAME: &'static str = "translate";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         Ok(Translate(parse_array_n(element)?))
     }
@@ -2020,6 +2147,20 @@ pub enum Transform {
     Translate(Translate),
 }
 
+impl Transform {
+    pub fn parse(e: &Element) -> Result<Option<Self>> {
+        match e.name() {
+            LookAt::NAME => Ok(Some(Self::LookAt(LookAt::parse(e)?))),
+            Matrix::NAME => Ok(Some(Self::Matrix(Matrix::parse(e)?))),
+            Rotate::NAME => Ok(Some(Self::Rotate(Rotate::parse(e)?))),
+            Scale::NAME => Ok(Some(Self::Scale(Scale::parse(e)?))),
+            Skew::NAME => Ok(Some(Self::Skew(Skew::parse(e)?))),
+            Translate::NAME => Ok(Some(Self::Translate(Translate::parse(e)?))),
+            _ => Ok(None),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Node {
     pub id: Option<String>,
@@ -2027,8 +2168,8 @@ pub struct Node {
     pub asset: Option<Box<Asset>>,
     pub transforms: Vec<Transform>,
     pub instance_camera: Vec<Instance<Camera>>,
-    pub instance_controller: Vec<InstanceController>,
-    pub instance_geometry: Vec<InstanceGeometry>,
+    pub instance_controller: Vec<Instance<Controller>>,
+    pub instance_geometry: Vec<Instance<Geometry>>,
     pub instance_light: Vec<Instance<Light>>,
     pub instance_node: Vec<Instance<Node>>,
     pub children: Vec<Node>,
@@ -2037,25 +2178,17 @@ pub struct Node {
 
 impl XNode for Node {
     const NAME: &'static str = "node";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
         Ok(Node {
             id: element.attr("id").map(Into::into),
             name: element.attr("name").map(Into::into),
             asset: Asset::parse_opt_box(&mut it)?,
-            transforms: parse_list_many(&mut it, |e| match e.name() {
-                LookAt::NAME => Ok(Some(Transform::LookAt(LookAt::parse(e)?))),
-                Matrix::NAME => Ok(Some(Transform::Matrix(Matrix::parse(e)?))),
-                Rotate::NAME => Ok(Some(Transform::Rotate(Rotate::parse(e)?))),
-                Scale::NAME => Ok(Some(Transform::Scale(Scale::parse(e)?))),
-                Skew::NAME => Ok(Some(Transform::Skew(Skew::parse(e)?))),
-                Translate::NAME => Ok(Some(Transform::Translate(Translate::parse(e)?))),
-                _ => Ok(None),
-            })?,
+            transforms: parse_list_many(&mut it, Transform::parse)?,
             instance_camera: Instance::parse_list(&mut it)?,
-            instance_controller: InstanceController::parse_list(&mut it)?,
-            instance_geometry: InstanceGeometry::parse_list(&mut it)?,
+            instance_controller: Instance::parse_list(&mut it)?,
+            instance_geometry: Instance::parse_list(&mut it)?,
             instance_light: Instance::parse_list(&mut it)?,
             instance_node: Instance::parse_list(&mut it)?,
             children: Node::parse_list(&mut it)?,
@@ -2076,7 +2209,7 @@ pub struct VisualScene {
 
 impl XNode for VisualScene {
     const NAME: &'static str = "visual_scene";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
         let res = VisualScene {
@@ -2102,7 +2235,7 @@ pub struct Library<T> {
 
 impl<T: ParseLibrary> XNode for Library<T> {
     const NAME: &'static str = T::LIBRARY;
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
         let res = Library {
@@ -2129,7 +2262,7 @@ macro_rules! mk_libraries {
         }
 
         impl LibraryElement {
-            pub fn parse(e: &Element) -> Result<Option<Self>, Error> {
+            pub fn parse(e: &Element) -> Result<Option<Self>> {
                 Ok(Some(match e.name() {
                     $($arg::LIBRARY => Self::$name(Library::parse(e)?),)*
                     _ => return Ok(None),
@@ -2158,41 +2291,47 @@ mk_libraries! {
 }
 
 #[derive(Debug)]
-pub struct Instance<T> {
+pub struct Instance<T: Instantiate> {
     pub url: Url,
+    pub data: T::Data,
     pub extra: Vec<Extra>,
-    pub _marker: PhantomData<T>,
 }
 
 pub trait Instantiate {
     const INSTANCE: &'static str;
+    type Data;
+    fn parse_data<'a>(it: &mut ElementIter<'a>) -> Result<Self::Data>;
 }
 
-impl Instantiate for Camera {
-    const INSTANCE: &'static str = "instance_camera";
+macro_rules! basic_instance {
+    ($($ty:ty => $val:expr;)*) => {
+        $(impl Instantiate for $ty {
+            const INSTANCE: &'static str = $val;
+            type Data = ();
+            fn parse_data<'a>(_: &mut ElementIter<'a>) -> Result<Self::Data> {
+                Ok(())
+            }
+        })*
+    }
 }
-impl Instantiate for Light {
-    const INSTANCE: &'static str = "instance_light";
-}
-impl Instantiate for Node {
-    const INSTANCE: &'static str = "instance_node";
-}
-impl Instantiate for PhysicsScene {
-    const INSTANCE: &'static str = "instance_physics_scene";
-}
-impl Instantiate for VisualScene {
-    const INSTANCE: &'static str = "instance_visual_scene";
+basic_instance! {
+    Camera => "instance_camera";
+    Light => "instance_light";
+    Node => "instance_node";
+    PhysicsScene => "instance_physics_scene";
+    VisualScene => "instance_visual_scene";
 }
 
 impl<T: Instantiate> XNode for Instance<T> {
     const NAME: &'static str = T::INSTANCE;
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let url = element.attr("url").ok_or("missing url attribute")?;
+        let mut it = element.children().peekable();
         Ok(Instance {
             url: Url::parse(url).map_err(|_| "url parse error")?,
-            extra: Extra::parse_many(element.children())?,
-            _marker: PhantomData,
+            data: T::parse_data(&mut it)?,
+            extra: Extra::parse_many(it)?,
         })
     }
 }
@@ -2207,7 +2346,7 @@ pub struct Param {
 
 impl XNode for Param {
     const NAME: &'static str = "param";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         Ok(Param {
             sid: element.attr("sid").map(Into::into),
@@ -2226,7 +2365,7 @@ pub struct SetParam {
 
 impl XNode for SetParam {
     const NAME: &'static str = "setparam";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         Ok(SetParam {
             extra: Extra::parse_many(element.children())?,
@@ -2241,7 +2380,7 @@ pub struct Technique {
 
 impl XNode for Technique {
     const NAME: &'static str = "technique";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         element.attr("profile").ok_or("expected 'profile' attr")?;
         Ok(Technique {
@@ -2261,7 +2400,7 @@ pub struct TechniqueHint {
 
 impl XNode for TechniqueHint {
     const NAME: &'static str = "technique_hint";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         Ok(TechniqueHint {
             extra: Extra::parse_many(element.children())?,
@@ -2277,7 +2416,7 @@ pub struct BindM {
 
 impl XNode for BindM {
     const NAME: &'static str = "bind";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let target = element.attr("target").ok_or("missing target attribute")?;
         Ok(BindM {
@@ -2296,7 +2435,7 @@ pub struct BindVertexInput {
 
 impl XNode for BindVertexInput {
     const NAME: &'static str = "bind_vertex_input";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let semantic = element.attr("semantic");
         let input_semantic = element.attr("input_semantic");
@@ -2321,7 +2460,7 @@ pub struct InstanceMaterial {
 
 impl XNode for InstanceMaterial {
     const NAME: &'static str = "instance_material";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let target = element.attr("target").ok_or("missing target attribute")?;
         let symbol = element.attr("symbol").ok_or("expecting symbol attr")?;
@@ -2348,7 +2487,7 @@ pub struct BindMaterial {
 
 impl XNode for BindMaterial {
     const NAME: &'static str = "bind_material";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
         Ok(BindMaterial {
@@ -2367,24 +2506,11 @@ impl XNode for BindMaterial {
     }
 }
 
-#[derive(Debug)]
-pub struct InstanceGeometry {
-    pub url: Url,
-    pub bind_material: Option<BindMaterial>,
-    pub extra: Vec<Extra>,
-}
-
-impl XNode for InstanceGeometry {
-    const NAME: &'static str = "instance_geometry";
-    fn parse(element: &Element) -> Result<Self, Error> {
-        debug_assert_eq!(element.name(), Self::NAME);
-        let url = element.attr("url").ok_or("missing url attribute")?;
-        let mut it = element.children().peekable();
-        Ok(InstanceGeometry {
-            url: Url::parse(url).map_err(|_| "url parse error")?,
-            bind_material: BindMaterial::parse_opt(&mut it)?,
-            extra: Extra::parse_many(it)?,
-        })
+impl Instantiate for Geometry {
+    const INSTANCE: &'static str = "instance_geometry";
+    type Data = Option<BindMaterial>;
+    fn parse_data<'a>(it: &mut ElementIter<'a>) -> Result<Self::Data> {
+        BindMaterial::parse_opt(it)
     }
 }
 
@@ -2396,7 +2522,7 @@ pub struct Skeleton {
 
 impl XNode for Skeleton {
     const NAME: &'static str = "skeleton";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         Ok(Skeleton {
             extra: Extra::parse_many(element.children())?,
@@ -2405,47 +2531,35 @@ impl XNode for Skeleton {
 }
 
 #[derive(Debug)]
-pub struct InstanceController {
-    pub url: Url,
+pub struct ControllerData {
     pub skeleton: Vec<Skeleton>,
     pub bind_material: Option<BindMaterial>,
-    pub extra: Vec<Extra>,
 }
 
-impl XNode for InstanceController {
-    const NAME: &'static str = "instance_controller";
-    fn parse(element: &Element) -> Result<Self, Error> {
-        debug_assert_eq!(element.name(), Self::NAME);
-        let url = element.attr("url").ok_or("missing url attribute")?;
-        let mut it = element.children().peekable();
-        Ok(InstanceController {
-            url: Url::parse(url).map_err(|_| "url parse error")?,
-            skeleton: Skeleton::parse_list(&mut it)?,
-            bind_material: BindMaterial::parse_opt(&mut it)?,
-            extra: Extra::parse_many(it)?,
+impl Instantiate for Controller {
+    const INSTANCE: &'static str = "instance_controller";
+    type Data = ControllerData;
+    fn parse_data<'a>(it: &mut ElementIter<'a>) -> Result<Self::Data> {
+        Ok(ControllerData {
+            skeleton: Skeleton::parse_list(it)?,
+            bind_material: BindMaterial::parse_opt(it)?,
         })
     }
 }
 
 #[derive(Debug)]
-pub struct InstanceEffect {
-    pub url: Url,
+pub struct EffectData {
     pub technique_hint: Vec<TechniqueHint>,
     pub set_param: Vec<SetParam>,
-    pub extra: Vec<Extra>,
 }
 
-impl XNode for InstanceEffect {
-    const NAME: &'static str = "instance_effect";
-    fn parse(element: &Element) -> Result<Self, Error> {
-        debug_assert_eq!(element.name(), Self::NAME);
-        let url = element.attr("url").ok_or("missing url attribute")?;
-        let mut it = element.children().peekable();
-        Ok(InstanceEffect {
-            url: Url::parse(url).map_err(|_| "url parse error")?,
-            technique_hint: TechniqueHint::parse_list(&mut it)?,
-            set_param: SetParam::parse_list(&mut it)?,
-            extra: Extra::parse_many(it)?,
+impl Instantiate for Effect {
+    const INSTANCE: &'static str = "instance_effect";
+    type Data = EffectData;
+    fn parse_data<'a>(it: &mut ElementIter<'a>) -> Result<Self::Data> {
+        Ok(EffectData {
+            technique_hint: TechniqueHint::parse_list(it)?,
+            set_param: SetParam::parse_list(it)?,
         })
     }
 }
@@ -2459,7 +2573,7 @@ pub struct Scene {
 
 impl XNode for Scene {
     const NAME: &'static str = "scene";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
         Ok(Scene {
@@ -2479,11 +2593,11 @@ pub struct Document {
 }
 
 impl Document {
-    pub fn from_reader<R: BufRead>(reader: R) -> Result<Self, Error> {
+    pub fn from_reader<R: BufRead>(reader: R) -> Result<Self> {
         Self::from_xml_reader(&mut XReader::from_reader(reader))
     }
 
-    pub fn from_xml_reader<R: BufRead>(reader: &mut XReader<R>) -> Result<Self, Error> {
+    pub fn from_xml_reader<R: BufRead>(reader: &mut XReader<R>) -> Result<Self> {
         let root = minidom::Element::from_reader(reader)?;
         Self::parse(&root)
     }
@@ -2491,7 +2605,7 @@ impl Document {
 
 impl XNode for Document {
     const NAME: &'static str = "COLLADA";
-    fn parse(element: &Element) -> Result<Self, Error> {
+    fn parse(element: &Element) -> Result<Self> {
         if element.name() != Self::NAME {
             return Err("Expected COLLADA root node".into());
         }
