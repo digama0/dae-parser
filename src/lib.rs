@@ -1,17 +1,8 @@
 //! TODO:
-//! * `ambient`
 //! * `channel`
-//! * `color`
-//! * `diffuse`
 //! * `joints`
-//! * `lambert`
-//! * `newparam`
-//! * `phong`
 //! * `sampler`
-//! * `shininess`
 //! * `skin`
-//! * `specular`
-//! * `texture`
 //! * `v`
 //! * `vertex_weights`
 
@@ -172,7 +163,7 @@ fn parse_list_many<'a, T>(
 }
 
 pub trait XNode: Sized {
-    const NAME: &'static str = "extra";
+    const NAME: &'static str;
     fn parse(element: &Element) -> Result<Self, Error>;
 
     fn parse_box<'a>(element: &Element) -> Result<Box<Self>, Error> {
@@ -754,65 +745,183 @@ impl ImageParam {
 }
 
 #[derive(Debug)]
+pub struct Texture {
+    pub texture: String,
+    pub texcoord: String,
+    pub extra: Option<Box<Extra>>,
+}
+
+impl XNode for Texture {
+    const NAME: &'static str = "texture";
+    fn parse(e: &Element) -> Result<Self, Error> {
+        let mut it = e.children().peekable();
+        let res = Texture {
+            texture: e.attr("texture").ok_or("expected texture attr")?.into(),
+            texcoord: e.attr("texcoord").ok_or("expected texcoord attr")?.into(),
+            extra: Extra::parse_opt_box(&mut it)?,
+        };
+        finish(res, it)
+    }
+}
+
+#[derive(Debug)]
+pub enum ColorParam {
+    Color(Box<[f32; 4]>),
+    Param(Box<str>),
+    Texture(Box<Texture>),
+}
+impl ColorParam {
+    pub fn parse(element: &Element) -> Result<Self, Error> {
+        let mut it = element.children().peekable();
+        parse_one_many(&mut it, |e| {
+            Ok(Some(match e.name() {
+                "color" => Self::Color(parse_array_n(e)?),
+                Param::NAME => Self::Param(e.attr("ref").ok_or("expected ref attr")?.into()),
+                Texture::NAME => Self::Texture(Texture::parse_box(e)?),
+                _ => return Ok(None),
+            }))
+        })
+    }
+}
+
+#[derive(Debug)]
+pub enum FloatParam {
+    Float(f32),
+    Param(Box<str>),
+}
+impl FloatParam {
+    pub fn parse(element: &Element) -> Result<Self, Error> {
+        let mut it = element.children().peekable();
+        parse_one_many(&mut it, |e| {
+            Ok(Some(match e.name() {
+                "float" => Self::Float(parse_elem(e)?),
+                Param::NAME => Self::Param(e.attr("ref").ok_or("expected ref attr")?.into()),
+                _ => return Ok(None),
+            }))
+        })
+    }
+}
+
+#[derive(Default, Debug)]
 pub struct Blinn {
-    // TODO
-    pub extra: Vec<Extra>,
+    pub emission: Option<ColorParam>,
+    pub ambient: Option<ColorParam>,
+    pub diffuse: Option<ColorParam>,
+    pub specular: Option<ColorParam>,
+    pub shininess: Option<FloatParam>,
+    pub reflective: Option<ColorParam>,
+    pub reflectivity: Option<FloatParam>,
+    pub transparent: Option<ColorParam>,
+    pub transparency: Option<FloatParam>,
+    pub index_of_refraction: Option<FloatParam>,
 }
 
 impl XNode for Blinn {
     const NAME: &'static str = "blinn";
     fn parse(element: &Element) -> Result<Self, Error> {
         debug_assert_eq!(element.name(), Self::NAME);
+        let mut it = element.children().peekable();
         Ok(Blinn {
-            extra: Extra::parse_many(element.children())?,
+            emission: parse_opt("emission", &mut it, ColorParam::parse)?,
+            ambient: parse_opt("ambient", &mut it, ColorParam::parse)?,
+            diffuse: parse_opt("diffuse", &mut it, ColorParam::parse)?,
+            specular: parse_opt("specular", &mut it, ColorParam::parse)?,
+            shininess: parse_opt("shininess", &mut it, FloatParam::parse)?,
+            reflective: parse_opt("reflective", &mut it, ColorParam::parse)?,
+            reflectivity: parse_opt("reflectivity", &mut it, FloatParam::parse)?,
+            transparent: parse_opt("transparent", &mut it, ColorParam::parse)?,
+            transparency: parse_opt("transparency", &mut it, FloatParam::parse)?,
+            index_of_refraction: parse_opt("index_of_refraction", &mut it, FloatParam::parse)?,
         })
     }
 }
 
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub struct ConstantFx {
-    // TODO
-    pub extra: Vec<Extra>,
+    pub emission: Option<ColorParam>,
+    pub reflective: Option<ColorParam>,
+    pub reflectivity: Option<FloatParam>,
+    pub transparent: Option<ColorParam>,
+    pub transparency: Option<FloatParam>,
+    pub index_of_refraction: Option<FloatParam>,
 }
 
 impl XNode for ConstantFx {
     const NAME: &'static str = "constant";
     fn parse(element: &Element) -> Result<Self, Error> {
         debug_assert_eq!(element.name(), Self::NAME);
+        let mut it = element.children().peekable();
         Ok(ConstantFx {
-            extra: Extra::parse_many(element.children())?,
+            emission: parse_opt("emission", &mut it, ColorParam::parse)?,
+            reflective: parse_opt("reflective", &mut it, ColorParam::parse)?,
+            reflectivity: parse_opt("reflectivity", &mut it, FloatParam::parse)?,
+            transparent: parse_opt("transparent", &mut it, ColorParam::parse)?,
+            transparency: parse_opt("transparency", &mut it, FloatParam::parse)?,
+            index_of_refraction: parse_opt("index_of_refraction", &mut it, FloatParam::parse)?,
         })
     }
 }
 
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub struct Lambert {
-    // TODO
-    pub extra: Vec<Extra>,
+    pub emission: Option<ColorParam>,
+    pub ambient: Option<ColorParam>,
+    pub diffuse: Option<ColorParam>,
+    pub reflective: Option<ColorParam>,
+    pub reflectivity: Option<FloatParam>,
+    pub transparent: Option<ColorParam>,
+    pub transparency: Option<FloatParam>,
+    pub index_of_refraction: Option<FloatParam>,
 }
 
 impl XNode for Lambert {
     const NAME: &'static str = "lambert";
     fn parse(element: &Element) -> Result<Self, Error> {
         debug_assert_eq!(element.name(), Self::NAME);
+        let mut it = element.children().peekable();
         Ok(Lambert {
-            extra: Extra::parse_many(element.children())?,
+            emission: parse_opt("emission", &mut it, ColorParam::parse)?,
+            ambient: parse_opt("ambient", &mut it, ColorParam::parse)?,
+            diffuse: parse_opt("diffuse", &mut it, ColorParam::parse)?,
+            reflective: parse_opt("reflective", &mut it, ColorParam::parse)?,
+            reflectivity: parse_opt("reflectivity", &mut it, FloatParam::parse)?,
+            transparent: parse_opt("transparent", &mut it, ColorParam::parse)?,
+            transparency: parse_opt("transparency", &mut it, FloatParam::parse)?,
+            index_of_refraction: parse_opt("index_of_refraction", &mut it, FloatParam::parse)?,
         })
     }
 }
 
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub struct Phong {
-    // TODO
-    pub extra: Vec<Extra>,
+    pub emission: Option<ColorParam>,
+    pub ambient: Option<ColorParam>,
+    pub diffuse: Option<ColorParam>,
+    pub specular: Option<ColorParam>,
+    pub shininess: Option<FloatParam>,
+    pub reflective: Option<ColorParam>,
+    pub reflectivity: Option<FloatParam>,
+    pub transparent: Option<ColorParam>,
+    pub transparency: Option<FloatParam>,
+    pub index_of_refraction: Option<FloatParam>,
 }
 
 impl XNode for Phong {
     const NAME: &'static str = "phong";
     fn parse(element: &Element) -> Result<Self, Error> {
         debug_assert_eq!(element.name(), Self::NAME);
+        let mut it = element.children().peekable();
         Ok(Phong {
-            extra: Extra::parse_many(element.children())?,
+            emission: parse_opt("emission", &mut it, ColorParam::parse)?,
+            ambient: parse_opt("ambient", &mut it, ColorParam::parse)?,
+            diffuse: parse_opt("diffuse", &mut it, ColorParam::parse)?,
+            specular: parse_opt("specular", &mut it, ColorParam::parse)?,
+            shininess: parse_opt("shininess", &mut it, FloatParam::parse)?,
+            reflective: parse_opt("reflective", &mut it, ColorParam::parse)?,
+            reflectivity: parse_opt("reflectivity", &mut it, FloatParam::parse)?,
+            transparent: parse_opt("transparent", &mut it, ColorParam::parse)?,
+            transparency: parse_opt("transparency", &mut it, FloatParam::parse)?,
+            index_of_refraction: parse_opt("index_of_refraction", &mut it, FloatParam::parse)?,
         })
     }
 }
