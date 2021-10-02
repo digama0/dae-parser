@@ -4,13 +4,10 @@
 //! * `diffuse`
 //! * `effect`
 //! * `extra`
-//! * `input`
 //! * `instance_material`
 //! * `newparam`
-//! * `p`
 //! * `param`
 //! * `phong`
-//! * `polylist`
 //! * `profile_COMMON`
 //! * `sampler2D`
 //! * `source`
@@ -18,9 +15,7 @@
 //! * `technique`
 //! * `technique_common`
 //! * `texture`
-//! * `triangles`
 //! * `user_properties`
-//! * `vcount`
 
 use minidom::{quick_xml, Element};
 use std::{io::BufRead, str::FromStr};
@@ -178,15 +173,12 @@ pub struct Extra {
 }
 
 impl Extra {
-    pub fn parse_many<'a>(
-        parent: &str,
-        it: impl Iterator<Item = &'a Element>,
-    ) -> Result<Vec<Extra>, Error> {
+    pub fn parse_many<'a>(it: impl Iterator<Item = &'a Element>) -> Result<Vec<Extra>, Error> {
         let mut extras = vec![];
         for e in it {
             match e.name() {
                 "extra" => extras.push(Extra::parse(e)?),
-                k => Err(format!("{}: unknown child {}", parent, k))?,
+                k => Err(format!("unexpected element {}", k))?,
             }
         }
         Ok(extras)
@@ -323,7 +315,7 @@ impl Animation {
         Ok(Animation {
             id: element.attr("id").map(Into::into),
             name: element.attr("name").map(Into::into),
-            extra: Extra::parse_many("animation", element.children())?,
+            extra: Extra::parse_many(element.children())?,
         })
     }
 }
@@ -342,7 +334,7 @@ impl AnimationClip {
         Ok(AnimationClip {
             id: element.attr("id").map(Into::into),
             name: element.attr("name").map(Into::into),
-            extra: Extra::parse_many("animation_clip", element.children())?,
+            extra: Extra::parse_many(element.children())?,
         })
     }
 }
@@ -361,7 +353,7 @@ impl Camera {
         Ok(Camera {
             id: element.attr("id").map(Into::into),
             name: element.attr("name").map(Into::into),
-            extra: Extra::parse_many("camera", element.children())?,
+            extra: Extra::parse_many(element.children())?,
         })
     }
 }
@@ -380,7 +372,7 @@ impl Controller {
         Ok(Controller {
             id: element.attr("id").map(Into::into),
             name: element.attr("name").map(Into::into),
-            extra: Extra::parse_many("controller", element.children())?,
+            extra: Extra::parse_many(element.children())?,
         })
     }
 }
@@ -399,7 +391,7 @@ impl Effect {
         Ok(Effect {
             id: element.attr("id").map(Into::into),
             name: element.attr("name").map(Into::into),
-            extra: Extra::parse_many("effect", element.children())?,
+            extra: Extra::parse_many(element.children())?,
         })
     }
 }
@@ -418,7 +410,7 @@ impl ForceField {
         Ok(ForceField {
             id: element.attr("id").map(Into::into),
             name: element.attr("name").map(Into::into),
-            extra: Extra::parse_many("force_field", element.children())?,
+            extra: Extra::parse_many(element.children())?,
         })
     }
 }
@@ -483,22 +475,129 @@ impl Source {
     }
 }
 
-#[derive(Debug)]
-pub struct InputU {
-    pub id: Option<String>,
-    pub name: Option<String>,
-    // TODO
-    pub extra: Vec<Extra>,
+macro_rules! mk_semantic {
+    ($($(#[$doc:meta])* $n:ident = $t:literal,)*) => {
+        #[derive(Clone, Debug, PartialEq, Eq)]
+        pub enum Semantic {
+            $($(#[$doc])* $n,)*
+            /// Any semantic value not covered above
+            Other(Box<str>),
+        }
+
+        impl Semantic {
+            fn parse(s: &str) -> Self {
+                match s {
+                    $($t => Self::$n,)*
+                    _ => Self::Other(s.into()),
+                }
+            }
+        }
+    };
 }
 
-impl InputU {
+mk_semantic! {
+    /// Geometric binormal (bitangent) vector
+    Binormal = "BINORMAL",
+    /// Color coordinate vector. Color inputs are RGB (float3)
+    Color = "COLOR",
+    /// Continuity constraint at the control vertex (CV)
+    Continuity = "CONTINUITY",
+    /// Raster or MIP-level input
+    Image = "IMAGE",
+    /// Sampler input
+    Input = "INPUT",
+    /// Tangent vector for preceding control point
+    InTangent = "IN_TANGENT",
+    /// Sampler interpolation type
+    Interpolation = "INTERPOLATION",
+    /// Inverse of local-to-world matrix
+    InvBindMatrix = "INV_BIND_MATRIX",
+    /// Skin influence identifier
+    Joint = "JOINT",
+    /// Number of piece-wise linear approximation steps to use for the spline segment that
+    /// follows this CV
+    LinearSteps = "LINEAR_STEPS",
+    /// Morph targets for mesh morphing
+    MorphTarget = "MORPH_TARGET",
+    /// Weights for mesh morphing
+    MorphWeight = "MORPH_WEIGHT",
+    /// Normal vector
+    Normal = "NORMAL",
+    /// Sampler output
+    Output = "OUTPUT",
+    /// Tangent vector for succeeding control point
+    OutTangent = "OUT_TANGENT",
+    /// Geometric coordinate vector
+    Position = "POSITION",
+    /// Geometric tangent vector
+    Tangent = "TANGENT",
+    /// Texture binormal (bitangent) vector
+    TexBinormal = "TEXBINORMAL",
+    /// Texture coordinate vector
+    TexCoord = "TEXCOORD",
+    /// Texture coordinate vector
+    TexTangent = "TEXTANGENT",
+    /// Generic parameter vector
+    UV = "UV",
+    /// Mesh vertex
+    Vertex = "VERTEX",
+    /// Skin influence weighting value
+    Weight = "WEIGHT",
+}
+
+#[derive(Debug)]
+pub struct Input {
+    pub semantic: Semantic,
+    pub source: Url,
+}
+
+impl Input {
     pub fn parse(element: &Element) -> Result<Self, Error> {
         debug_assert_eq!(element.name(), "input");
-        Ok(InputU {
-            id: element.attr("id").map(Into::into),
-            name: element.attr("name").map(Into::into),
-            extra: Extra::parse_many("input", element.children())?,
+        let semantic = element.attr("semantic").ok_or("missing semantic attr")?;
+        let src = element.attr("source").ok_or("missing source attr")?;
+        Ok(Input {
+            semantic: Semantic::parse(semantic),
+            source: Url::parse(src).map_err(|_| "url parse error")?,
         })
+    }
+}
+
+#[derive(Debug)]
+pub struct InputS {
+    pub input: Input,
+    pub offset: u32,
+    pub set: Option<u32>,
+}
+
+impl InputS {
+    pub fn parse(element: &Element) -> Result<Self, Error> {
+        Ok(InputS {
+            input: Input::parse(element)?,
+            offset: parse_attr(element.attr("offset"))?.ok_or("missing offset attr")?,
+            set: parse_attr(element.attr("set"))?,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct InputList {
+    pub inputs: Vec<InputS>,
+    pub depth: u32,
+}
+
+impl InputList {
+    pub fn parse<'a>(
+        it: &mut std::iter::Peekable<impl Iterator<Item = &'a Element>>,
+    ) -> Result<Self, Error> {
+        let inputs = parse_list("input", it, InputS::parse)?;
+        let depth = inputs.iter().map(|i| i.offset).max().map_or(0, |n| n + 1);
+        Ok(InputList { inputs, depth })
+    }
+
+    fn check_prim<const MIN: usize>(&self, data: &[u32]) -> bool {
+        let depth = self.depth as usize;
+        depth != 0 && data.len() < depth * MIN && data.len() % depth == 0
     }
 }
 
@@ -506,7 +605,7 @@ impl InputU {
 pub struct Vertices {
     pub id: String,
     pub name: Option<String>,
-    pub input: Vec<InputU>,
+    pub input: Vec<Input>,
     pub extra: Vec<Extra>,
 }
 
@@ -517,8 +616,8 @@ impl Vertices {
         let res = Vertices {
             id: element.attr("id").ok_or("missing 'id' attr")?.into(),
             name: element.attr("name").map(Into::into),
-            input: parse_list("input", &mut it, InputU::parse)?,
-            extra: Extra::parse_many("vertices", it)?,
+            input: parse_list("input", &mut it, Input::parse)?,
+            extra: Extra::parse_many(it)?,
         };
         if res.input.is_empty() {
             Err("no inputs")?
@@ -528,135 +627,241 @@ impl Vertices {
 }
 
 #[derive(Debug)]
-pub struct Lines {
-    pub id: Option<String>,
+pub struct Geom<T> {
     pub name: Option<String>,
-    // TODO
+    pub material: Option<String>,
+    pub count: u32,
+    pub inputs: InputList,
+    pub data: T,
     pub extra: Vec<Extra>,
 }
 
-impl Lines {
-    pub fn parse(element: &Element) -> Result<Self, Error> {
-        debug_assert_eq!(element.name(), "lines");
-        Ok(Lines {
-            id: element.attr("id").map(Into::into),
+trait ParseGeom: Sized {
+    const NAME: &'static str;
+    fn parse<'a>(
+        it: &mut std::iter::Peekable<impl Iterator<Item = &'a Element>>,
+    ) -> Result<Self, Error>;
+
+    fn validate(_: &Geom<Self>) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn parse_geom(element: &Element) -> Result<Geom<Self>, Error> {
+        debug_assert_eq!(element.name(), Self::NAME);
+        let mut it = element.children().peekable();
+        let res = Geom {
             name: element.attr("name").map(Into::into),
-            extra: Extra::parse_many("lines", element.children())?,
-        })
+            material: element.attr("material").map(Into::into),
+            count: parse_attr(element.attr("count"))?.ok_or("expected 'count' attr")?,
+            inputs: InputList::parse(&mut it)?,
+            data: Self::parse(&mut it)?,
+            extra: Extra::parse_many(it)?,
+        };
+        Self::validate(&res)?;
+        Ok(res)
     }
 }
 
 #[derive(Debug)]
-pub struct LineStrips {
-    pub id: Option<String>,
-    pub name: Option<String>,
-    // TODO
-    pub extra: Vec<Extra>,
-}
+pub struct LineGeom(pub Option<Box<[u32]>>);
+pub type Lines = Geom<LineGeom>;
 
-impl LineStrips {
-    pub fn parse(element: &Element) -> Result<Self, Error> {
-        debug_assert_eq!(element.name(), "line_strips");
-        Ok(LineStrips {
-            id: element.attr("id").map(Into::into),
-            name: element.attr("name").map(Into::into),
-            extra: Extra::parse_many("line_strips", element.children())?,
-        })
+impl ParseGeom for LineGeom {
+    const NAME: &'static str = "lines";
+
+    fn parse<'a>(
+        it: &mut std::iter::Peekable<impl Iterator<Item = &'a Element>>,
+    ) -> Result<Self, Error> {
+        Ok(LineGeom(parse_opt("p", it, parse_array)?))
+    }
+
+    fn validate(res: &Geom<Self>) -> Result<(), Error> {
+        if let Some(ref data) = res.data.0 {
+            if res.inputs.depth as usize * 2 * res.count as usize != data.len() {
+                Err("line count does not match <p> field")?
+            }
+        }
+        Ok(())
     }
 }
 
 #[derive(Debug)]
-pub struct Polygons {
-    pub id: Option<String>,
-    pub name: Option<String>,
-    // TODO
-    pub extra: Vec<Extra>,
-}
+pub struct LineStripGeom(pub Vec<Box<[u32]>>);
+pub type LineStrips = Geom<LineStripGeom>;
 
-impl Polygons {
-    pub fn parse(element: &Element) -> Result<Self, Error> {
-        debug_assert_eq!(element.name(), "polygons");
-        Ok(Polygons {
-            id: element.attr("id").map(Into::into),
-            name: element.attr("name").map(Into::into),
-            extra: Extra::parse_many("polygons", element.children())?,
-        })
+impl ParseGeom for LineStripGeom {
+    const NAME: &'static str = "line_strips";
+
+    fn parse<'a>(
+        it: &mut std::iter::Peekable<impl Iterator<Item = &'a Element>>,
+    ) -> Result<Self, Error> {
+        Ok(LineStripGeom(parse_list("p", it, parse_array)?))
+    }
+
+    fn validate(res: &Geom<Self>) -> Result<(), Error> {
+        if res.count as usize != res.data.0.len() {
+            Err("line strip count does not match <p> fields")?
+        }
+        if !res.data.0.iter().all(|p| res.inputs.check_prim::<2>(p)) {
+            Err("incorrect <p> field in line strips")?
+        }
+        Ok(())
     }
 }
 
 #[derive(Debug)]
-pub struct PolyList {
-    pub id: Option<String>,
-    pub name: Option<String>,
-    // TODO
-    pub extra: Vec<Extra>,
+pub struct PolygonHole {
+    pub verts: Box<[u32]>,
+    pub hole: Vec<Box<[u32]>>,
 }
 
-impl PolyList {
-    pub fn parse(element: &Element) -> Result<Self, Error> {
-        debug_assert_eq!(element.name(), "poly_list");
-        Ok(PolyList {
-            id: element.attr("id").map(Into::into),
-            name: element.attr("name").map(Into::into),
-            extra: Extra::parse_many("poly_list", element.children())?,
-        })
+#[derive(Debug)]
+pub struct PolygonGeom(pub Vec<PolygonHole>);
+pub type Polygons = Geom<PolygonGeom>;
+
+impl ParseGeom for PolygonGeom {
+    const NAME: &'static str = "polygon";
+
+    fn parse<'a>(
+        it: &mut std::iter::Peekable<impl Iterator<Item = &'a Element>>,
+    ) -> Result<Self, Error> {
+        let mut polys = parse_list("p", it, |e| {
+            Ok(PolygonHole {
+                verts: parse_array(e)?,
+                hole: vec![],
+            })
+        })?;
+        let more_polys = parse_list("ph", it, |e| {
+            let mut it = e.children().peekable();
+            let verts = parse_one("p", &mut it, parse_array)?;
+            let hole = parse_list("h", &mut it, parse_array)?;
+            if hole.is_empty() {
+                Err("<ph> element can only be used when at least one hole is present")?
+            }
+            finish(PolygonHole { verts, hole }, it)
+        })?;
+        polys.extend(more_polys);
+        Ok(PolygonGeom(polys))
+    }
+
+    fn validate(res: &Geom<Self>) -> Result<(), Error> {
+        if res.count as usize != res.data.0.len() {
+            Err("polygon count does not match <p> fields")?
+        }
+        if !res.data.0.iter().all(|ph| {
+            res.inputs.check_prim::<3>(&ph.verts)
+                && ph.hole.iter().all(|h| res.inputs.check_prim::<3>(h))
+        }) {
+            Err("incorrect <p> field in polygon")?
+        }
+        Ok(())
     }
 }
 
 #[derive(Debug)]
-pub struct Triangles {
-    pub id: Option<String>,
-    pub name: Option<String>,
-    // TODO
-    pub extra: Vec<Extra>,
+pub struct PolyListGeom {
+    pub vcount: Option<Box<[u32]>>,
+    pub prim: Option<Box<[u32]>>,
 }
+pub type PolyList = Geom<PolyListGeom>;
 
-impl Triangles {
-    pub fn parse(element: &Element) -> Result<Self, Error> {
-        debug_assert_eq!(element.name(), "triangles");
-        Ok(Triangles {
-            id: element.attr("id").map(Into::into),
-            name: element.attr("name").map(Into::into),
-            extra: Extra::parse_many("triangles", element.children())?,
+impl ParseGeom for PolyListGeom {
+    const NAME: &'static str = "polylist";
+
+    fn parse<'a>(
+        it: &mut std::iter::Peekable<impl Iterator<Item = &'a Element>>,
+    ) -> Result<Self, Error> {
+        Ok(PolyListGeom {
+            vcount: parse_opt("vcount", it, parse_array)?,
+            prim: parse_opt("p", it, parse_array)?,
         })
+    }
+
+    fn validate(res: &Geom<Self>) -> Result<(), Error> {
+        match (&res.data.vcount, &res.data.prim) {
+            (None, None) => {}
+            (Some(vcount), Some(data)) => {
+                if res.count as usize != vcount.len() {
+                    Err("polylist count does not match <vcount> field")?
+                }
+                if res.inputs.depth as usize * vcount.iter().sum::<u32>() as usize != data.len() {
+                    Err("polylist vcount does not match <p> field")?
+                }
+            }
+            _ => Err("polylist: <vcount> and <p> should be provided together")?,
+        }
+        Ok(())
     }
 }
 
 #[derive(Debug)]
-pub struct TriFans {
-    pub id: Option<String>,
-    pub name: Option<String>,
-    // TODO
-    pub extra: Vec<Extra>,
-}
+pub struct TriangleGeom(pub Option<Box<[u32]>>);
+pub type Triangles = Geom<TriangleGeom>;
 
-impl TriFans {
-    pub fn parse(element: &Element) -> Result<Self, Error> {
-        debug_assert_eq!(element.name(), "trifans");
-        Ok(TriFans {
-            id: element.attr("id").map(Into::into),
-            name: element.attr("name").map(Into::into),
-            extra: Extra::parse_many("trifans", element.children())?,
-        })
+impl ParseGeom for TriangleGeom {
+    const NAME: &'static str = "triangles";
+
+    fn parse<'a>(
+        it: &mut std::iter::Peekable<impl Iterator<Item = &'a Element>>,
+    ) -> Result<Self, Error> {
+        Ok(TriangleGeom(parse_opt("p", it, parse_array)?))
+    }
+
+    fn validate(res: &Geom<Self>) -> Result<(), Error> {
+        if let Some(ref data) = res.data.0 {
+            if res.inputs.depth as usize * 3 * res.count as usize != data.len() {
+                Err("triangle count does not match <p> field")?
+            }
+        }
+        Ok(())
     }
 }
 
 #[derive(Debug)]
-pub struct TriStrips {
-    pub id: Option<String>,
-    pub name: Option<String>,
-    // TODO
-    pub extra: Vec<Extra>,
+pub struct TriFanGeom(pub Vec<Box<[u32]>>);
+pub type TriFans = Geom<TriFanGeom>;
+
+impl ParseGeom for TriFanGeom {
+    const NAME: &'static str = "trifans";
+
+    fn parse<'a>(
+        it: &mut std::iter::Peekable<impl Iterator<Item = &'a Element>>,
+    ) -> Result<Self, Error> {
+        Ok(TriFanGeom(parse_list("p", it, parse_array)?))
+    }
+
+    fn validate(res: &Geom<Self>) -> Result<(), Error> {
+        if res.count as usize != res.data.0.len() {
+            Err("triangle fan count does not match <p> fields")?
+        }
+        if !res.data.0.iter().all(|p| res.inputs.check_prim::<3>(p)) {
+            Err("incorrect <p> field in triangle fans")?
+        }
+        Ok(())
+    }
 }
 
-impl TriStrips {
-    pub fn parse(element: &Element) -> Result<Self, Error> {
-        debug_assert_eq!(element.name(), "tristrips");
-        Ok(TriStrips {
-            id: element.attr("id").map(Into::into),
-            name: element.attr("name").map(Into::into),
-            extra: Extra::parse_many("tristrips", element.children())?,
-        })
+#[derive(Debug)]
+pub struct TriStripGeom(pub Vec<Box<[u32]>>);
+pub type TriStrips = Geom<TriStripGeom>;
+
+impl ParseGeom for TriStripGeom {
+    const NAME: &'static str = "tristrips";
+
+    fn parse<'a>(
+        it: &mut std::iter::Peekable<impl Iterator<Item = &'a Element>>,
+    ) -> Result<Self, Error> {
+        Ok(TriStripGeom(parse_list("p", it, parse_array)?))
+    }
+
+    fn validate(res: &Geom<Self>) -> Result<(), Error> {
+        if res.count as usize != res.data.0.len() {
+            Err("triangle strip count does not match <p> fields")?
+        }
+        if !res.data.0.iter().all(|p| res.inputs.check_prim::<3>(p)) {
+            Err("incorrect <p> field in triangle strips")?
+        }
+        Ok(())
     }
 }
 
@@ -674,13 +879,13 @@ pub enum Primitive {
 impl Primitive {
     pub fn parse(e: &Element) -> Result<Option<Self>, Error> {
         Ok(Some(match e.name() {
-            "lines" => Primitive::Lines(Lines::parse(e)?),
-            "linestrips" => Primitive::LineStrips(LineStrips::parse(e)?),
-            "polygons" => Primitive::Polygons(Polygons::parse(e)?),
-            "polylist" => Primitive::PolyList(PolyList::parse(e)?),
-            "triangles" => Primitive::Triangles(Triangles::parse(e)?),
-            "trifans" => Primitive::TriFans(TriFans::parse(e)?),
-            "tristrips" => Primitive::TriStrips(TriStrips::parse(e)?),
+            LineGeom::NAME => Primitive::Lines(LineGeom::parse_geom(e)?),
+            LineStripGeom::NAME => Primitive::LineStrips(LineStripGeom::parse_geom(e)?),
+            PolygonGeom::NAME => Primitive::Polygons(PolygonGeom::parse_geom(e)?),
+            PolyListGeom::NAME => Primitive::PolyList(PolyListGeom::parse_geom(e)?),
+            TriangleGeom::NAME => Primitive::Triangles(TriangleGeom::parse_geom(e)?),
+            TriFanGeom::NAME => Primitive::TriFans(TriFanGeom::parse_geom(e)?),
+            TriStripGeom::NAME => Primitive::TriStrips(TriStripGeom::parse_geom(e)?),
             _ => return Ok(None),
         }))
     }
@@ -723,7 +928,7 @@ impl Mesh {
             source: parse_list("source", &mut it, Source::parse)?,
             vertices: parse_opt("vertices", &mut it, Vertices::parse)?,
             elements: parse_list_many(&mut it, Primitive::parse)?,
-            extra: Extra::parse_many("mesh", it)?,
+            extra: Extra::parse_many(it)?,
         };
         if res.source.is_empty() {
             Err("no mesh source")?
@@ -734,7 +939,7 @@ impl Mesh {
 
 #[derive(Debug)]
 pub struct ControlVertices {
-    pub input: Vec<InputU>,
+    pub input: Vec<Input>,
     pub extra: Vec<Extra>,
 }
 
@@ -743,8 +948,8 @@ impl ControlVertices {
         debug_assert_eq!(element.name(), "control_vertices");
         let mut it = element.children().peekable();
         let res = ControlVertices {
-            input: parse_list("input", &mut it, InputU::parse)?,
-            extra: Extra::parse_many("control_vertices", it)?,
+            input: parse_list("input", &mut it, Input::parse)?,
+            extra: Extra::parse_many(it)?,
         };
         if res.input.is_empty() {
             Err("no inputs")?
@@ -769,7 +974,7 @@ impl Spline {
             closed: parse_attr(element.attr("closed"))?.unwrap_or(false),
             source: parse_list("source", &mut it, Source::parse)?,
             controls: parse_one("control_vertices", &mut it, ControlVertices::parse)?,
-            extra: Extra::parse_many("spline", it)?,
+            extra: Extra::parse_many(it)?,
         };
         if res.source.is_empty() {
             Err("no spline source")?
@@ -814,7 +1019,7 @@ impl Geometry {
             name: element.attr("name").map(Into::into),
             asset: parse_opt("asset", &mut it, Asset::parse)?,
             element: parse_one_many(&mut it, GeometryElement::parse)?,
-            extra: Extra::parse_many("geometry", it)?,
+            extra: Extra::parse_many(it)?,
         })
     }
 }
@@ -881,7 +1086,7 @@ impl Image {
             depth: parse_attr(element.attr("depth"))?.unwrap_or(1),
             asset: parse_opt("asset", &mut it, Asset::parse)?,
             source: parse_one_many(&mut it, ImageSource::parse)?,
-            extra: Extra::parse_many("image", it)?,
+            extra: Extra::parse_many(it)?,
         })
     }
 }
@@ -900,7 +1105,7 @@ impl Light {
         Ok(Light {
             id: element.attr("id").map(Into::into),
             name: element.attr("name").map(Into::into),
-            extra: Extra::parse_many("light", element.children())?,
+            extra: Extra::parse_many(element.children())?,
         })
     }
 }
@@ -923,7 +1128,7 @@ impl Material {
             name: element.attr("name").map(Into::into),
             asset: parse_opt("asset", &mut it, Asset::parse)?,
             instance_effect: parse_one("instance_effect", &mut it, InstanceEffect::parse)?,
-            extra: Extra::parse_many("material", it)?,
+            extra: Extra::parse_many(it)?,
         })
     }
 }
@@ -942,7 +1147,7 @@ impl PhysicsMaterial {
         Ok(PhysicsMaterial {
             id: element.attr("id").map(Into::into),
             name: element.attr("name").map(Into::into),
-            extra: Extra::parse_many("physics_material", element.children())?,
+            extra: Extra::parse_many(element.children())?,
         })
     }
 }
@@ -961,7 +1166,7 @@ impl PhysicsModel {
         Ok(PhysicsModel {
             id: element.attr("id").map(Into::into),
             name: element.attr("name").map(Into::into),
-            extra: Extra::parse_many("physics_model", element.children())?,
+            extra: Extra::parse_many(element.children())?,
         })
     }
 }
@@ -980,7 +1185,7 @@ impl PhysicsScene {
         Ok(PhysicsScene {
             id: element.attr("id").map(Into::into),
             name: element.attr("name").map(Into::into),
-            extra: Extra::parse_many("physics_scene", element.children())?,
+            extra: Extra::parse_many(element.children())?,
         })
     }
 }
@@ -1103,7 +1308,7 @@ impl Node {
                 Instance::parse("instance_node", e)
             })?,
             children: parse_list("node", &mut it, Node::parse)?,
-            extra: Extra::parse_many("visual_scene", it)?,
+            extra: Extra::parse_many(it)?,
         })
     }
 }
@@ -1127,7 +1332,7 @@ impl VisualScene {
             name: element.attr("name").map(Into::into),
             asset: parse_opt("asset", &mut it, Asset::parse)?,
             nodes: parse_list("node", &mut it, Node::parse)?,
-            extra: Extra::parse_many("visual_scene", it)?,
+            extra: Extra::parse_many(it)?,
         };
         if res.nodes.is_empty() {
             Err("no child nodes")?
@@ -1153,7 +1358,7 @@ impl<T> Library<T> {
         let res = Library {
             asset: parse_opt("asset", &mut it, Asset::parse)?,
             items: parse_list(name, &mut it, f)?,
-            extra: Extra::parse_many("library", it)?,
+            extra: Extra::parse_many(it)?,
         };
         if res.items.is_empty() {
             Err("no items")?
@@ -1233,7 +1438,7 @@ impl Instance {
         let url = element.attr("url").ok_or("missing url attribute")?;
         Ok(Instance {
             url: Url::parse(url).map_err(|_| "url parse error")?,
-            extra: Extra::parse_many(name, element.children())?,
+            extra: Extra::parse_many(element.children())?,
         })
     }
 }
@@ -1248,7 +1453,7 @@ impl Param {
     pub fn parse(element: &Element) -> Result<Self, Error> {
         debug_assert_eq!(element.name(), "param");
         Ok(Param {
-            extra: Extra::parse_many("param", element.children())?,
+            extra: Extra::parse_many(element.children())?,
         })
     }
 }
@@ -1263,7 +1468,7 @@ impl SetParam {
     pub fn parse(element: &Element) -> Result<Self, Error> {
         debug_assert_eq!(element.name(), "setparam");
         Ok(SetParam {
-            extra: Extra::parse_many("setparam", element.children())?,
+            extra: Extra::parse_many(element.children())?,
         })
     }
 }
@@ -1278,7 +1483,7 @@ impl TechniqueCommon {
     pub fn parse(element: &Element) -> Result<Self, Error> {
         debug_assert_eq!(element.name(), "technique_common");
         Ok(TechniqueCommon {
-            extra: Extra::parse_many("technique_common", element.children())?,
+            extra: Extra::parse_many(element.children())?,
         })
     }
 }
@@ -1293,7 +1498,7 @@ impl Technique {
     pub fn parse(element: &Element) -> Result<Self, Error> {
         debug_assert_eq!(element.name(), "technique");
         Ok(Technique {
-            extra: Extra::parse_many("technique", element.children())?,
+            extra: Extra::parse_many(element.children())?,
         })
     }
 }
@@ -1308,7 +1513,7 @@ impl TechniqueHint {
     pub fn parse(element: &Element) -> Result<Self, Error> {
         debug_assert_eq!(element.name(), "technique_hint");
         Ok(TechniqueHint {
-            extra: Extra::parse_many("technique_hint", element.children())?,
+            extra: Extra::parse_many(element.children())?,
         })
     }
 }
@@ -1329,7 +1534,7 @@ impl BindMaterial {
             param: parse_list("param", &mut it, Param::parse)?,
             technique_common: parse_one("technique_common", &mut it, TechniqueCommon::parse)?,
             technique: parse_list("technique", &mut it, Technique::parse)?,
-            extra: Extra::parse_many("bind_material", it)?,
+            extra: Extra::parse_many(it)?,
         })
     }
 }
@@ -1349,7 +1554,7 @@ impl InstanceGeometry {
         Ok(InstanceGeometry {
             url: Url::parse(url).map_err(|_| "url parse error")?,
             bind_material: parse_opt("bind_material", &mut it, BindMaterial::parse)?,
-            extra: Extra::parse_many("instance_geometry", it)?,
+            extra: Extra::parse_many(it)?,
         })
     }
 }
@@ -1364,7 +1569,7 @@ impl Skeleton {
     pub fn parse(element: &Element) -> Result<Self, Error> {
         debug_assert_eq!(element.name(), "skeleton");
         Ok(Skeleton {
-            extra: Extra::parse_many("skeleton", element.children())?,
+            extra: Extra::parse_many(element.children())?,
         })
     }
 }
@@ -1386,7 +1591,7 @@ impl InstanceController {
             url: Url::parse(url).map_err(|_| "url parse error")?,
             skeleton: parse_list("skeleton", &mut it, Skeleton::parse)?,
             bind_material: parse_opt("bind_material", &mut it, BindMaterial::parse)?,
-            extra: Extra::parse_many("instance_controller", it)?,
+            extra: Extra::parse_many(it)?,
         })
     }
 }
@@ -1408,7 +1613,7 @@ impl InstanceEffect {
             url: Url::parse(url).map_err(|_| "url parse error")?,
             technique_hint: parse_list("technique_hint", &mut it, TechniqueHint::parse)?,
             set_param: parse_list("setparam", &mut it, SetParam::parse)?,
-            extra: Extra::parse_many("instance_effect", it)?,
+            extra: Extra::parse_many(it)?,
         })
     }
 }
@@ -1431,7 +1636,7 @@ impl Scene {
             instance_visual_scene: parse_opt("instance_physics_scene", &mut it, |e| {
                 Instance::parse("instance_visual_scene", e)
             })?,
-            extra: Extra::parse_many("scene", it)?,
+            extra: Extra::parse_many(it)?,
         })
     }
 }
@@ -1466,7 +1671,7 @@ impl Document {
             asset: parse_one("asset", &mut it, Asset::parse)?,
             library: parse_list_many(&mut it, LibraryElement::parse)?,
             scene: parse_opt("scene", &mut it, Scene::parse)?,
-            extra: Extra::parse_many("COLLADA", it)?,
+            extra: Extra::parse_many(it)?,
         })
     }
 }
