@@ -3,21 +3,15 @@
 //! * `channel`
 //! * `color`
 //! * `diffuse`
-//! * `float`
 //! * `joints`
 //! * `lambert`
 //! * `newparam`
 //! * `phong`
 //! * `sampler`
-//! * `sampler2D`
 //! * `shininess`
 //! * `skin`
-//! * `source`
 //! * `specular`
-//! * `surface`
-//! * `technique_common`
 //! * `texture`
-//! * `user_properties`
 //! * `v`
 //! * `vertex_weights`
 
@@ -67,19 +61,26 @@ fn parse_text(element: &Element) -> Result<String, Error> {
     Ok(get_text(element).ok_or("expecting a text node")?.to_owned())
 }
 
-fn parse_float_list(element: &Element) -> Result<Box<[f32]>, Error> {
-    get_text(element)
-        .ok_or("expecting a text node")?
+fn parse_array<T: FromStr>(e: &Element) -> Result<Box<[T]>, Error> {
+    get_text(e)
+        .ok_or("expected text node")?
         .split_ascii_whitespace()
         .map(|s| s.parse())
         .collect::<Result<_, _>>()
-        .map_err(|_| "failed to parse float".into())
+        .map_err(|_| "parse error".into())
 }
 
-fn parse_float_array<const N: usize>(element: &Element) -> Result<Box<[f32; N]>, Error> {
-    Ok(parse_float_list(element)?
+fn parse_array_n<T: FromStr, const N: usize>(element: &Element) -> Result<Box<[T; N]>, Error> {
+    Ok(parse_array(element)?
         .try_into()
         .map_err(|_| "unexpected number of elements")?)
+}
+
+fn parse_elem<T: FromStr>(e: &Element) -> Result<T, Error> {
+    get_text(e)
+        .ok_or("expected text node")?
+        .parse()
+        .map_err(|_| "parse error".into())
 }
 
 fn parse_attr<T: FromStr>(attr: Option<&str>) -> Result<Option<T>, Error> {
@@ -174,6 +175,10 @@ pub trait XNode: Sized {
     const NAME: &'static str = "extra";
     fn parse(element: &Element) -> Result<Self, Error>;
 
+    fn parse_box<'a>(element: &Element) -> Result<Box<Self>, Error> {
+        Self::parse(element).map(Box::new)
+    }
+
     fn parse_one<'a>(it: &mut impl Iterator<Item = &'a Element>) -> Result<Self, Error> {
         parse_one(Self::NAME, it, Self::parse)
     }
@@ -182,6 +187,12 @@ pub trait XNode: Sized {
         it: &mut std::iter::Peekable<impl Iterator<Item = &'a Element>>,
     ) -> Result<Option<Self>, Error> {
         parse_opt(Self::NAME, it, Self::parse)
+    }
+
+    fn parse_opt_box<'a>(
+        it: &mut std::iter::Peekable<impl Iterator<Item = &'a Element>>,
+    ) -> Result<Option<Box<Self>>, Error> {
+        parse_opt(Self::NAME, it, Self::parse_box)
     }
 
     fn parse_list<'a>(
@@ -322,7 +333,9 @@ pub struct Asset {
     pub up_axis: UpAxis,
 }
 
-impl Asset {
+impl XNode for Asset {
+    const NAME: &'static str = "asset";
+
     fn parse_box(element: &Element) -> Result<Box<Self>, Error> {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
@@ -342,14 +355,6 @@ impl Asset {
         finish(res, it)
     }
 
-    fn parse_opt_box<'a>(
-        it: &mut std::iter::Peekable<impl Iterator<Item = &'a Element>>,
-    ) -> Result<Option<Box<Self>>, Error> {
-        parse_opt(Self::NAME, it, Self::parse_box)
-    }
-}
-impl XNode for Asset {
-    const NAME: &'static str = "asset";
     fn parse(element: &Element) -> Result<Self, Error> {
         Ok(*Self::parse_box(element)?)
     }
@@ -456,33 +461,395 @@ impl XNode for Annotate {
 }
 
 #[derive(Debug)]
-pub struct NewParam {
-    // TODO
+pub enum SurfaceFace {
+    PosX,
+    NegX,
+    PosY,
+    NegY,
+    PosZ,
+    NegZ,
+}
+
+impl Default for SurfaceFace {
+    fn default() -> Self {
+        Self::PosX
+    }
+}
+
+impl FromStr for SurfaceFace {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "POSITIVE_X" => Ok(Self::PosX),
+            "NEGATIVE_X" => Ok(Self::NegX),
+            "POSITIVE_Y" => Ok(Self::PosY),
+            "NEGATIVE_Y" => Ok(Self::NegY),
+            "POSITIVE_Z" => Ok(Self::PosZ),
+            "NEGATIVE_Z" => Ok(Self::NegZ),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum SurfaceInit {
+    Null,
+    Target,
+    // Cube(InitCube),
+    // Volume(InitVolume),
+    // Planar(InitPlanar),
+    From {
+        mip: u32,
+        slice: u32,
+        face: SurfaceFace,
+    },
+}
+
+impl SurfaceInit {
+    pub fn parse(element: &Element) -> Result<Option<Self>, Error> {
+        Ok(Some(match element.name() {
+            "init_as_null" => Self::Null,
+            "init_as_target" => Self::Target,
+            "init_cube" | "init_volume" | "init_planar" => unimplemented!(),
+            "init_from" => Self::From {
+                mip: parse_attr(element.attr("mip"))?.unwrap_or(0),
+                slice: parse_attr(element.attr("slice"))?.unwrap_or(0),
+                face: parse_attr(element.attr("face"))?.unwrap_or_default(),
+            },
+            _ => return Ok(None),
+        }))
+    }
+}
+
+#[derive(Debug)]
+pub struct Surface {
+    pub init: SurfaceInit,
+    pub format: Option<String>,
+    pub format_hint: Option<String>,
+    pub size: Option<Box<[u32; 3]>>,
+    pub viewport_ratio: Option<Box<[f32; 2]>>,
+    pub mip_levels: u32,
+    pub mipmap_generate: bool,
     pub extra: Vec<Extra>,
 }
 
-impl XNode for NewParam {
-    const NAME: &'static str = "newparam";
+impl XNode for Surface {
+    const NAME: &'static str = "surface";
     fn parse(element: &Element) -> Result<Self, Error> {
         debug_assert_eq!(element.name(), Self::NAME);
-        Ok(NewParam {
+        let mut it = element.children().peekable();
+        Ok(Surface {
+            init: parse_one_many(&mut it, SurfaceInit::parse)?,
+            format: parse_opt("format", &mut it, parse_text)?,
+            format_hint: parse_opt("format_hint", &mut it, parse_text)?,
+            size: parse_opt("size", &mut it, parse_array_n)?,
+            viewport_ratio: parse_opt("viewport_ratio", &mut it, parse_array_n)?,
+            mip_levels: parse_opt("mip_levels", &mut it, parse_elem)?.unwrap_or(0),
+            mipmap_generate: parse_opt("mipmap_generate", &mut it, parse_elem)?.unwrap_or(false),
+            extra: Extra::parse_many(it)?,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub enum WrapMode {
+    Wrap,
+    Mirror,
+    Clamp,
+    Border,
+    None,
+}
+
+impl Default for WrapMode {
+    fn default() -> Self {
+        Self::Wrap
+    }
+}
+
+impl FromStr for WrapMode {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "WRAP" => Ok(Self::Wrap),
+            "MIRROR" => Ok(Self::Mirror),
+            "CLAMP" => Ok(Self::Clamp),
+            "BORDER" => Ok(Self::Border),
+            "NONE" => Ok(Self::None),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum SamplerFilterMode {
+    None,
+    Nearest,
+    Linear,
+    NearestMipmapNearest,
+    LinearMipmapNearest,
+    NearestMipmapLinear,
+    LinearMipmapLinear,
+}
+
+impl Default for SamplerFilterMode {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
+impl FromStr for SamplerFilterMode {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "NONE" => Ok(Self::None),
+            "NEAREST" => Ok(Self::Nearest),
+            "LINEAR" => Ok(Self::Linear),
+            "NEAREST_MIPMAP_NEAREST" => Ok(Self::NearestMipmapNearest),
+            "LINEAR_MIPMAP_NEAREST" => Ok(Self::LinearMipmapNearest),
+            "NEAREST_MIPMAP_LINEAR" => Ok(Self::NearestMipmapLinear),
+            "LINEAR_MIPMAP_LINEAR" => Ok(Self::LinearMipmapLinear),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Sampler2D {
+    pub source: String,
+    pub wrap_s: WrapMode,
+    pub wrap_t: WrapMode,
+    pub min_filter: SamplerFilterMode,
+    pub mag_filter: SamplerFilterMode,
+    pub mip_filter: SamplerFilterMode,
+    pub border_color: Option<Box<[f32; 4]>>,
+    pub mipmap_max_level: u8,
+    pub mipmap_bias: f32,
+    pub extra: Vec<Extra>,
+}
+
+impl XNode for Sampler2D {
+    const NAME: &'static str = "sampler2D";
+    fn parse(element: &Element) -> Result<Self, Error> {
+        debug_assert_eq!(element.name(), Self::NAME);
+        let mut it = element.children().peekable();
+        Ok(Sampler2D {
+            source: parse_one("source", &mut it, parse_text)?,
+            wrap_s: parse_opt("wrap_s", &mut it, parse_elem)?.unwrap_or_default(),
+            wrap_t: parse_opt("wrap_t", &mut it, parse_elem)?.unwrap_or_default(),
+            min_filter: parse_opt("minfilter", &mut it, parse_elem)?.unwrap_or_default(),
+            mag_filter: parse_opt("magfilter", &mut it, parse_elem)?.unwrap_or_default(),
+            mip_filter: parse_opt("mipfilter", &mut it, parse_elem)?.unwrap_or_default(),
+            border_color: parse_opt("border_color", &mut it, parse_array_n)?,
+            mipmap_max_level: parse_opt("mipmap_maxlevel", &mut it, parse_elem)?.unwrap_or(0),
+            mipmap_bias: parse_opt("mipmap_bias", &mut it, parse_elem)?.unwrap_or(0.),
             extra: Extra::parse_many(element.children())?,
         })
     }
 }
 
 #[derive(Debug)]
-pub struct TechniqueFx {
+pub enum ParamType {
+    Float(f32),
+    Float2([f32; 2]),
+    Float3(Box<[f32; 3]>),
+    Float4(Box<[f32; 4]>),
+    Surface(Box<Surface>),
+    Sampler2D(Box<Sampler2D>),
+    Other(Box<Element>),
+}
+
+impl ParamType {
+    pub fn parse(e: &Element) -> Result<Option<Self>, Error> {
+        Ok(Some(match e.name() {
+            "float" => ParamType::Float(parse_array_n::<_, 1>(e)?[0]),
+            "float2" => ParamType::Float2(*parse_array_n(e)?),
+            "float3" => ParamType::Float3(parse_array_n(e)?),
+            "float4" => ParamType::Float4(parse_array_n(e)?),
+            Surface::NAME => ParamType::Surface(Surface::parse_box(e)?),
+            Sampler2D::NAME => ParamType::Sampler2D(Sampler2D::parse_box(e)?),
+            _ => Self::Other(Box::new(e.clone())),
+        }))
+    }
+}
+
+#[derive(Debug)]
+pub struct NewParam {
+    pub sid: String,
+    pub annotate: Vec<Annotate>,
+    pub semantic: Option<String>,
+    pub modifier: Option<String>,
+    pub ty: ParamType,
+}
+
+impl XNode for NewParam {
+    const NAME: &'static str = "newparam";
+    fn parse(element: &Element) -> Result<Self, Error> {
+        debug_assert_eq!(element.name(), Self::NAME);
+        let mut it = element.children().peekable();
+        let res = NewParam {
+            sid: element.attr("sid").ok_or("expecting sid attr")?.into(),
+            annotate: Annotate::parse_list(&mut it)?,
+            semantic: parse_opt("semantic", &mut it, parse_text)?,
+            modifier: parse_opt("modifier", &mut it, parse_text)?,
+            ty: parse_one_many(&mut it, ParamType::parse)?,
+        };
+        finish(res, it)
+    }
+}
+
+#[derive(Debug)]
+pub enum ImageParam {
+    NewParam(NewParam),
+    SetParam(SetParam),
+    Image(Image),
+}
+
+#[derive(Debug)]
+pub struct TechniqueFx<T> {
+    pub id: Option<String>,
+    pub sid: String,
+    pub asset: Option<Box<Asset>>,
+    pub data: T,
+    pub extra: Vec<Extra>,
+}
+
+impl<T: ProfileData> XNode for TechniqueFx<T> {
+    const NAME: &'static str = "technique";
+    fn parse(element: &Element) -> Result<Self, Error> {
+        debug_assert_eq!(element.name(), Self::NAME);
+        let mut it = element.children().peekable();
+        Ok(TechniqueFx {
+            id: element.attr("sid").map(Into::into),
+            sid: element.attr("sid").ok_or("expecting sid attr")?.into(),
+            asset: Asset::parse_opt_box(&mut it)?,
+            data: T::parse(&mut it)?,
+            extra: Extra::parse_many(it)?,
+        })
+    }
+}
+
+pub trait ProfileData: Sized {
+    fn parse<'a>(
+        it: &mut std::iter::Peekable<impl Iterator<Item = &'a Element>>,
+    ) -> Result<Self, Error>;
+}
+
+impl ImageParam {
+    fn parse_list<'a>(
+        allow_setparam: bool,
+        it: &mut std::iter::Peekable<impl Iterator<Item = &'a Element>>,
+    ) -> Result<Vec<Self>, Error> {
+        parse_list_many(it, |e| {
+            Ok(Some(match e.name() {
+                Image::NAME => Self::Image(Image::parse(e)?),
+                NewParam::NAME => Self::NewParam(NewParam::parse(e)?),
+                SetParam::NAME if allow_setparam => Self::SetParam(SetParam::parse(e)?),
+                _ => return Ok(None),
+            }))
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct Blinn {
     // TODO
     pub extra: Vec<Extra>,
 }
 
-impl XNode for TechniqueFx {
-    const NAME: &'static str = "technique";
+impl XNode for Blinn {
+    const NAME: &'static str = "blinn";
     fn parse(element: &Element) -> Result<Self, Error> {
         debug_assert_eq!(element.name(), Self::NAME);
-        Ok(TechniqueFx {
+        Ok(Blinn {
             extra: Extra::parse_many(element.children())?,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct ConstantFx {
+    // TODO
+    pub extra: Vec<Extra>,
+}
+
+impl XNode for ConstantFx {
+    const NAME: &'static str = "constant";
+    fn parse(element: &Element) -> Result<Self, Error> {
+        debug_assert_eq!(element.name(), Self::NAME);
+        Ok(ConstantFx {
+            extra: Extra::parse_many(element.children())?,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct Lambert {
+    // TODO
+    pub extra: Vec<Extra>,
+}
+
+impl XNode for Lambert {
+    const NAME: &'static str = "lambert";
+    fn parse(element: &Element) -> Result<Self, Error> {
+        debug_assert_eq!(element.name(), Self::NAME);
+        Ok(Lambert {
+            extra: Extra::parse_many(element.children())?,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct Phong {
+    // TODO
+    pub extra: Vec<Extra>,
+}
+
+impl XNode for Phong {
+    const NAME: &'static str = "phong";
+    fn parse(element: &Element) -> Result<Self, Error> {
+        debug_assert_eq!(element.name(), Self::NAME);
+        Ok(Phong {
+            extra: Extra::parse_many(element.children())?,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub enum Shader {
+    Blinn(Blinn),
+    Constant(ConstantFx),
+    Lambert(Lambert),
+    Phong(Phong),
+}
+
+impl Shader {
+    pub fn parse(e: &Element) -> Result<Option<Self>, Error> {
+        Ok(Some(match e.name() {
+            Blinn::NAME => Self::Blinn(Blinn::parse(e)?),
+            ConstantFx::NAME => Self::Constant(ConstantFx::parse(e)?),
+            Lambert::NAME => Self::Lambert(Lambert::parse(e)?),
+            Phong::NAME => Self::Phong(Phong::parse(e)?),
+            _ => return Ok(None),
+        }))
+    }
+}
+
+#[derive(Debug)]
+pub struct CommonData {
+    pub image_param: Vec<ImageParam>,
+    pub shaders: Vec<Shader>,
+}
+
+impl ProfileData for CommonData {
+    fn parse<'a>(
+        it: &mut std::iter::Peekable<impl Iterator<Item = &'a Element>>,
+    ) -> Result<Self, Error> {
+        Ok(CommonData {
+            image_param: ImageParam::parse_list(false, it)?,
+            shaders: parse_list_many(it, Shader::parse)?,
         })
     }
 }
@@ -492,7 +859,7 @@ pub struct ProfileCommon {
     pub asset: Option<Box<Asset>>,
     pub image: Vec<Image>,
     pub new_param: Vec<NewParam>,
-    pub technique: Vec<TechniqueFx>,
+    pub technique: Vec<TechniqueFx<CommonData>>,
     pub extra: Vec<Extra>,
 }
 
@@ -502,19 +869,14 @@ impl XNode for ProfileCommon {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
         let asset = Asset::parse_opt_box(&mut it)?;
-        let image_and_newparam = parse_list_many(&mut it, |e| {
-            Ok(Some(match e.name() {
-                Image::NAME => Ok(Image::parse(e)?),
-                NewParam::NAME => Err(NewParam::parse(e)?),
-                _ => return Ok(None),
-            }))
-        })?;
+        let image_param = ImageParam::parse_list(false, &mut it)?;
         let mut image = vec![];
         let mut new_param = vec![];
-        for either in image_and_newparam {
-            match either {
-                Ok(e) => image.push(e),
-                Err(e) => new_param.push(e),
+        for ip in image_param {
+            match ip {
+                ImageParam::Image(e) => image.push(e),
+                ImageParam::NewParam(e) => new_param.push(e),
+                ImageParam::SetParam(_) => unreachable!(),
             }
         }
         Ok(ProfileCommon {
@@ -640,10 +1002,13 @@ pub enum ArrayElement {
     Int(Box<[u32]>),
 }
 
-fn parse_array<T: FromStr>(e: &Element) -> Result<Box<[T]>, Error> {
+fn parse_array_count<T: FromStr>(e: &Element) -> Result<Box<[T]>, Error> {
     let count: usize = parse_attr(e.attr("count"))?.ok_or("expected 'count' attr")?;
     let mut vec = Vec::with_capacity(count);
-    for s in get_text(e).ok_or("expected text node")?.split_whitespace() {
+    for s in get_text(e)
+        .ok_or("expected text node")?
+        .split_ascii_whitespace()
+    {
         vec.push(s.parse().map_err(|_| "parse error")?)
     }
     if vec.len() != count {
@@ -655,11 +1020,11 @@ fn parse_array<T: FromStr>(e: &Element) -> Result<Box<[T]>, Error> {
 impl ArrayElement {
     pub fn parse(e: &Element) -> Result<Option<Self>, Error> {
         Ok(Some(match e.name() {
-            "IDREF_array" => Self::IdRef(parse_array(e)?),
-            "Name_array" => Self::Name(parse_array(e)?),
-            "bool_array" => Self::Bool(parse_array(e)?),
-            "float_array" => Self::Float(parse_array(e)?),
-            "int_array" => Self::Int(parse_array(e)?),
+            "IDREF_array" => Self::IdRef(parse_array_count(e)?),
+            "Name_array" => Self::Name(parse_array_count(e)?),
+            "bool_array" => Self::Bool(parse_array_count(e)?),
+            "float_array" => Self::Float(parse_array_count(e)?),
+            "int_array" => Self::Int(parse_array_count(e)?),
             _ => return Ok(None),
         }))
     }
@@ -687,7 +1052,7 @@ impl XNode for Source {
             array: parse_opt_many(&mut it, ArrayElement::parse)?,
             accessor: parse_one(Technique::COMMON, &mut it, |e| {
                 let mut it = e.children().peekable();
-                finish(parse_one(Accessor::NAME, &mut it, Accessor::parse)?, it)
+                finish(Accessor::parse_one(&mut it)?, it)
             })?,
             technique: Technique::parse_list(&mut it)?,
         };
@@ -1477,7 +1842,7 @@ impl XNode for LookAt {
     const NAME: &'static str = "lookat";
     fn parse(element: &Element) -> Result<Self, Error> {
         debug_assert_eq!(element.name(), Self::NAME);
-        Ok(LookAt(parse_float_array(element)?))
+        Ok(LookAt(parse_array_n(element)?))
     }
 }
 
@@ -1488,7 +1853,7 @@ impl XNode for Matrix {
     const NAME: &'static str = "matrix";
     fn parse(element: &Element) -> Result<Self, Error> {
         debug_assert_eq!(element.name(), Self::NAME);
-        Ok(Matrix(parse_float_array(element)?))
+        Ok(Matrix(parse_array_n(element)?))
     }
 }
 
@@ -1499,7 +1864,7 @@ impl XNode for Rotate {
     const NAME: &'static str = "Rotate";
     fn parse(element: &Element) -> Result<Self, Error> {
         debug_assert_eq!(element.name(), Self::NAME);
-        Ok(Rotate(parse_float_array(element)?))
+        Ok(Rotate(parse_array_n(element)?))
     }
 }
 
@@ -1510,7 +1875,7 @@ impl XNode for Scale {
     const NAME: &'static str = "scale";
     fn parse(element: &Element) -> Result<Self, Error> {
         debug_assert_eq!(element.name(), Self::NAME);
-        Ok(Scale(parse_float_array(element)?))
+        Ok(Scale(parse_array_n(element)?))
     }
 }
 
@@ -1521,7 +1886,7 @@ impl XNode for Skew {
     const NAME: &'static str = "skew";
     fn parse(element: &Element) -> Result<Self, Error> {
         debug_assert_eq!(element.name(), Self::NAME);
-        Ok(Skew(parse_float_array(element)?))
+        Ok(Skew(parse_array_n(element)?))
     }
 }
 
@@ -1532,7 +1897,7 @@ impl XNode for Translate {
     const NAME: &'static str = "translate";
     fn parse(element: &Element) -> Result<Self, Error> {
         debug_assert_eq!(element.name(), Self::NAME);
-        Ok(Translate(parse_float_array(element)?))
+        Ok(Translate(parse_array_n(element)?))
     }
 }
 
