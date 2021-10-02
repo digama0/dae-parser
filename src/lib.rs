@@ -392,10 +392,9 @@ impl XNode for Channel {
     const NAME: &'static str = "channel";
     fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
-        let src = element.attr("source").ok_or("missing source attr")?;
         let target = element.attr("target").ok_or("expecting target attr")?;
         Ok(Channel {
-            source: Url::parse(src).map_err(|_| "url parse error")?,
+            source: parse_attr(element.attr("source"))?.ok_or("missing source attr")?,
             target: target.into(),
         })
     }
@@ -558,9 +557,8 @@ impl XNode for Skin {
     fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
-        let src = element.attr("source").ok_or("missing source attr")?;
         let res = Skin {
-            source: Url::parse(src).map_err(|_| "url parse error")?,
+            source: parse_attr(element.attr("source"))?.ok_or("missing source attr")?,
             bind_shape_matrix: parse_opt("bind_shape_matrix", &mut it, parse_array_n)?,
             sources: Source::parse_list(&mut it)?,
             joints: Joints::parse_one(&mut it)?,
@@ -641,9 +639,8 @@ impl XNode for Morph {
     fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
-        let src = element.attr("source").ok_or("missing source attr")?;
         Ok(Morph {
-            source: Url::parse(src).map_err(|_| "url parse error")?,
+            source: parse_attr(element.attr("source"))?.ok_or("missing source attr")?,
             method: parse_attr(element.attr("method"))?.unwrap_or_default(),
             sources: Source::parse_list_n::<2>(&mut it)?,
             targets: Targets::parse_one(&mut it)?,
@@ -1484,12 +1481,11 @@ impl XNode for Accessor {
     const NAME: &'static str = "accessor";
     fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
-        let src = element.attr("source").ok_or("missing source attr")?;
         let mut it = element.children().peekable();
         let res = Accessor {
             count: parse_attr(element.attr("count"))?.ok_or("expected 'count' attr")?,
             offset: parse_attr(element.attr("offset"))?.unwrap_or(0),
-            source: Url::parse(src).map_err(|_| "url parse error")?,
+            source: parse_attr(element.attr("source"))?.ok_or("missing source attr")?,
             stride: parse_attr(element.attr("stride"))?.unwrap_or(1),
             param: Param::parse_list(&mut it)?,
         };
@@ -1582,10 +1578,9 @@ impl XNode for Input {
     fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let semantic = element.attr("semantic").ok_or("missing semantic attr")?;
-        let src = element.attr("source").ok_or("missing source attr")?;
         Ok(Input {
             semantic: Semantic::parse(semantic),
-            source: Url::parse(src).map_err(|_| "url parse error")?,
+            source: parse_attr(element.attr("source"))?.ok_or("missing source attr")?,
         })
     }
 }
@@ -1941,10 +1936,8 @@ impl ConvexMesh {
     pub const NAME: &'static str = "convex_mesh";
     pub fn parse(element: &Element) -> Result<GeometryElement> {
         debug_assert_eq!(element.name(), Self::NAME);
-        if let Some(s) = element.attr("convex_hull_of") {
-            return Ok(GeometryElement::ConvexHullOf(
-                Url::parse(s).map_err(|_| "url parse error")?,
-            ));
+        if let Some(s) = parse_attr(element.attr("convex_hull_of"))? {
+            return Ok(GeometryElement::ConvexHullOf(s));
         }
         Ok(GeometryElement::Mesh(Mesh::parse(true, element)?))
     }
@@ -2295,11 +2288,19 @@ impl XNode for Material {
 }
 
 #[derive(Debug)]
+pub struct PhysicsMaterialCommon {
+    pub dynamic_friction: f32,
+    pub restitution: f32,
+    pub static_friction: f32,
+}
+
+#[derive(Debug)]
 pub struct PhysicsMaterial {
     pub id: Option<String>,
     pub name: Option<String>,
     pub asset: Option<Box<Asset>>,
-    // TODO
+    pub common: PhysicsMaterialCommon,
+    pub technique: Vec<Technique>,
     pub extra: Vec<Extra>,
 }
 
@@ -2312,7 +2313,361 @@ impl XNode for PhysicsMaterial {
             id: element.attr("id").map(Into::into),
             name: element.attr("name").map(Into::into),
             asset: Asset::parse_opt_box(&mut it)?,
+            common: parse_one(Technique::COMMON, &mut it, |e| {
+                let mut it = e.children().peekable();
+                let res = PhysicsMaterialCommon {
+                    dynamic_friction: parse_opt("dynamic_friction", &mut it, parse_elem)?
+                        .unwrap_or(0.),
+                    restitution: parse_opt("restitution", &mut it, parse_elem)?.unwrap_or(0.),
+                    static_friction: parse_opt("static_friction", &mut it, parse_elem)?
+                        .unwrap_or(0.),
+                };
+                finish(res, it)
+            })?,
+            technique: Technique::parse_list(&mut it)?,
             extra: Extra::parse_many(it)?,
+        })
+    }
+}
+
+#[derive(Default, Debug)]
+pub struct RigidBodyCommon {
+    pub dynamic: Option<bool>,
+    pub mass: Option<f32>,
+    pub mass_frame: Vec<RigidTransform>,
+    pub inertia: Option<Box<[f32; 3]>>,
+    pub physics_material: Option<Box<DefInstance<PhysicsMaterial>>>,
+    pub shape: Vec<Shape>,
+}
+
+impl RigidBodyCommon {
+    fn parse<'a>(mut it: ElementIter<'a>) -> Result<Self> {
+        let res = Self {
+            dynamic: parse_opt("dynamic", &mut it, parse_elem)?,
+            mass: parse_opt("mass", &mut it, parse_elem)?,
+            mass_frame: parse_opt("mass_frame", &mut it, |e| {
+                let mut it = e.children().peekable();
+                finish(parse_list_many(&mut it, RigidTransform::parse)?, it)
+            })?
+            .unwrap_or_default(),
+            inertia: parse_opt("inertia", &mut it, parse_array_n)?,
+            physics_material: parse_opt_many(&mut it, DefInstance::parse)?.map(Box::new),
+            shape: Shape::parse_list(&mut it)?,
+        };
+        finish(res, it)
+    }
+}
+
+#[derive(Debug)]
+pub struct RigidBody {
+    pub sid: Option<String>,
+    pub name: Option<String>,
+    pub common: RigidBodyCommon,
+    pub technique: Vec<Technique>,
+    pub extra: Vec<Extra>,
+}
+
+impl std::ops::Deref for RigidBody {
+    type Target = RigidBodyCommon;
+
+    fn deref(&self) -> &Self::Target {
+        &self.common
+    }
+}
+
+impl XNode for RigidBody {
+    const NAME: &'static str = "rigid_body";
+    fn parse(element: &Element) -> Result<Self> {
+        debug_assert_eq!(element.name(), Self::NAME);
+        let mut it = element.children().peekable();
+        Ok(RigidBody {
+            sid: element.attr("sid").map(Into::into),
+            name: element.attr("name").map(Into::into),
+            common: parse_one(Technique::COMMON, &mut it, |e| {
+                RigidBodyCommon::parse(e.children().peekable())
+            })?,
+            technique: Technique::parse_list(&mut it)?,
+            extra: Extra::parse_many(it)?,
+        })
+    }
+}
+
+#[derive(Default, Debug)]
+pub struct InstanceRigidBodyCommon {
+    pub angular_velocity: [f32; 3],
+    pub velocity: [f32; 3],
+    pub common: RigidBodyCommon,
+}
+
+impl std::ops::Deref for InstanceRigidBodyCommon {
+    type Target = RigidBodyCommon;
+
+    fn deref(&self) -> &Self::Target {
+        &self.common
+    }
+}
+
+impl InstanceRigidBodyCommon {
+    pub fn parse(e: &Element) -> Result<Self> {
+        let mut it = e.children().peekable();
+        Ok(Self {
+            angular_velocity: parse_opt("angular_velocity", &mut it, parse_array_n)?
+                .map_or([0.; 3], |a| *a),
+            velocity: parse_opt("velocity", &mut it, parse_array_n)?.map_or([0.; 3], |a| *a),
+            common: RigidBodyCommon::parse(it)?,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct InstanceRigidBody {
+    pub body: String,
+    pub target: Url,
+    pub common: InstanceRigidBodyCommon,
+    pub technique: Vec<Technique>,
+    pub extra: Vec<Extra>,
+}
+
+impl std::ops::Deref for InstanceRigidBody {
+    type Target = InstanceRigidBodyCommon;
+
+    fn deref(&self) -> &Self::Target {
+        &self.common
+    }
+}
+
+impl XNode for InstanceRigidBody {
+    const NAME: &'static str = "rigid_body";
+    fn parse(element: &Element) -> Result<Self> {
+        debug_assert_eq!(element.name(), Self::NAME);
+        let mut it = element.children().peekable();
+        Ok(InstanceRigidBody {
+            body: element.attr("body").ok_or("missing body attribute")?.into(),
+            target: parse_attr(element.attr("target"))?.ok_or("missing url attribute")?,
+            common: parse_one(Technique::COMMON, &mut it, InstanceRigidBodyCommon::parse)?,
+            technique: Technique::parse_list(&mut it)?,
+            extra: Extra::parse_many(it)?,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub enum RigidTransform {
+    Translate(Translate),
+    Rotate(Rotate),
+}
+
+impl RigidTransform {
+    pub fn parse(e: &Element) -> Result<Option<Self>> {
+        match e.name() {
+            Translate::NAME => Ok(Some(Self::Translate(Translate::parse(e)?))),
+            Rotate::NAME => Ok(Some(Self::Rotate(Rotate::parse(e)?))),
+            _ => Ok(None),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Shape {
+    pub hollow: Option<bool>,
+    pub mass: Option<f32>,
+    pub density: Option<f32>,
+    pub physics_material: Option<Box<DefInstance<PhysicsMaterial>>>,
+    pub transform: Vec<RigidTransform>,
+    pub extra: Vec<Extra>,
+}
+
+impl XNode for Shape {
+    const NAME: &'static str = "shape";
+    fn parse(element: &Element) -> Result<Self> {
+        debug_assert_eq!(element.name(), Self::NAME);
+        let mut it = element.children().peekable();
+        Ok(Shape {
+            hollow: parse_opt("hollow", &mut it, parse_elem)?,
+            mass: parse_opt("mass", &mut it, parse_elem)?,
+            density: parse_opt("density", &mut it, parse_elem)?,
+            physics_material: parse_opt_many(&mut it, DefInstance::parse)?.map(Box::new),
+            transform: parse_list_many(&mut it, RigidTransform::parse)?,
+            extra: Extra::parse_many(it)?,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct Attachment {
+    pub rigid_body: Url,
+    pub transform: Vec<RigidTransform>,
+    pub extra: Vec<Extra>,
+}
+
+impl Attachment {
+    const REF: &'static str = "ref_attachment";
+}
+impl XNode for Attachment {
+    const NAME: &'static str = "attachment";
+    fn parse(element: &Element) -> Result<Self> {
+        debug_assert!(element.name() == Self::NAME || element.name() == Self::REF);
+        let mut it = element.children().peekable();
+        Ok(Attachment {
+            rigid_body: parse_attr(element.attr("rigid_body"))?.ok_or("missing rigid_body attr")?,
+            transform: parse_list_many(&mut it, RigidTransform::parse)?,
+            extra: Extra::parse_many(it)?,
+        })
+    }
+}
+
+#[derive(Default, Debug)]
+pub struct Limits {
+    pub min: Option<Box<[f32; 3]>>,
+    pub max: Option<Box<[f32; 3]>>,
+}
+impl Limits {
+    pub fn parse<'a>(e: &Element) -> Result<Self> {
+        let mut it = e.children().peekable();
+        let res = Self {
+            min: parse_opt("min", &mut it, parse_array_n)?,
+            max: parse_opt("max", &mut it, parse_array_n)?,
+        };
+        finish(res, it)
+    }
+}
+
+#[derive(Debug)]
+pub struct Spring {
+    pub stiffness: f32,
+    pub damping: f32,
+    pub target_value: f32,
+}
+
+impl Default for Spring {
+    fn default() -> Self {
+        Self {
+            stiffness: 1.,
+            damping: 0.,
+            target_value: 0.,
+        }
+    }
+}
+
+impl Spring {
+    pub fn parse<'a>(e: &Element) -> Result<Self> {
+        let mut it = e.children().peekable();
+        let res = Self {
+            stiffness: parse_opt("stiffness", &mut it, parse_elem)?.unwrap_or(1.),
+            damping: parse_opt("damping", &mut it, parse_elem)?.unwrap_or(0.),
+            target_value: parse_opt("target_value", &mut it, parse_elem)?.unwrap_or(0.),
+        };
+        finish(res, it)
+    }
+}
+
+#[derive(Default, Debug)]
+pub struct RigidConstraintCommon {
+    pub enabled: bool,
+    pub interpenetrate: bool,
+    pub swing_cone_and_twist: Limits,
+    pub linear: Limits,
+    pub spring_linear: Spring,
+    pub spring_angular: Spring,
+}
+
+impl RigidConstraintCommon {
+    pub fn parse<'a>(e: &Element) -> Result<Self> {
+        let mut it = e.children().peekable();
+        let enabled = parse_opt("enabled", &mut it, parse_elem)?.unwrap_or(true);
+        let interpenetrate = parse_opt("interpenetrate", &mut it, parse_elem)?.unwrap_or(false);
+        let (swing_cone_and_twist, linear) = parse_opt("limits", &mut it, |e| {
+            let mut it = e.children().peekable();
+            let scat =
+                parse_opt("swing_cone_and_twist", &mut it, Limits::parse)?.unwrap_or_default();
+            let lin = parse_opt("linear", &mut it, Limits::parse)?.unwrap_or_default();
+            finish((scat, lin), it)
+        })?
+        .unwrap_or_default();
+        let (spring_linear, spring_angular) = parse_opt("spring", &mut it, |e| {
+            let mut it = e.children().peekable();
+            let lin = parse_opt("linear", &mut it, Spring::parse)?.unwrap_or_default();
+            let ang = parse_opt("angular", &mut it, Spring::parse)?.unwrap_or_default();
+            finish((lin, ang), it)
+        })?
+        .unwrap_or_default();
+        let res = Self {
+            enabled,
+            interpenetrate,
+            swing_cone_and_twist,
+            linear,
+            spring_linear,
+            spring_angular,
+        };
+        finish(res, it)
+    }
+}
+
+#[derive(Debug)]
+pub struct RigidConstraint {
+    pub sid: Option<String>,
+    pub name: Option<String>,
+    pub ref_attachment: Attachment,
+    pub attachment: Attachment,
+    pub common: RigidConstraintCommon,
+    pub technique: Vec<Technique>,
+    pub extra: Vec<Extra>,
+}
+
+impl XNode for RigidConstraint {
+    const NAME: &'static str = "rigid_constraint";
+    fn parse(element: &Element) -> Result<Self> {
+        debug_assert_eq!(element.name(), Self::NAME);
+        let mut it = element.children().peekable();
+        Ok(RigidConstraint {
+            sid: element.attr("sid").map(Into::into),
+            name: element.attr("name").map(Into::into),
+            ref_attachment: parse_one(Attachment::REF, &mut it, Attachment::parse)?,
+            attachment: Attachment::parse_one(&mut it)?,
+            common: parse_one(Technique::COMMON, &mut it, RigidConstraintCommon::parse)?,
+            technique: Technique::parse_list(&mut it)?,
+            extra: Extra::parse_many(it)?,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct InstanceRigidConstraint {
+    pub constraint: String,
+    pub extra: Vec<Extra>,
+}
+
+impl XNode for InstanceRigidConstraint {
+    const NAME: &'static str = "rigid_constraint";
+    fn parse(element: &Element) -> Result<Self> {
+        debug_assert_eq!(element.name(), Self::NAME);
+        Ok(InstanceRigidConstraint {
+            constraint: element
+                .attr("constraint")
+                .ok_or("missing constraint attribute")?
+                .into(),
+            extra: Extra::parse_many(element.children())?,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct PhysicsModelData {
+    pub parent: Option<Url>,
+    pub instance_force_field: Vec<Instance<ForceField>>,
+    pub instance_rigid_body: Vec<InstanceRigidBody>,
+    pub instance_rigid_constraint: Vec<InstanceRigidConstraint>,
+}
+
+impl Instantiate for PhysicsModel {
+    const INSTANCE: &'static str = "instance_physics_model";
+    type Data = PhysicsModelData;
+    fn parse_data<'a>(e: &Element, it: &mut ElementIter<'a>) -> Result<Self::Data> {
+        Ok(PhysicsModelData {
+            parent: parse_attr(e.attr("parent"))?,
+            instance_force_field: Instance::parse_list(it)?,
+            instance_rigid_body: InstanceRigidBody::parse_list(it)?,
+            instance_rigid_constraint: InstanceRigidConstraint::parse_list(it)?,
         })
     }
 }
@@ -2322,7 +2677,9 @@ pub struct PhysicsModel {
     pub id: Option<String>,
     pub name: Option<String>,
     pub asset: Option<Box<Asset>>,
-    // TODO
+    pub rigid_body: Vec<RigidBody>,
+    pub rigid_constraint: Vec<RigidConstraint>,
+    pub instances: Vec<Instance<PhysicsModel>>,
     pub extra: Vec<Extra>,
 }
 
@@ -2335,8 +2692,28 @@ impl XNode for PhysicsModel {
             id: element.attr("id").map(Into::into),
             name: element.attr("name").map(Into::into),
             asset: Asset::parse_opt_box(&mut it)?,
+            rigid_body: RigidBody::parse_list(&mut it)?,
+            rigid_constraint: RigidConstraint::parse_list(&mut it)?,
+            instances: Instance::parse_list(&mut it)?,
             extra: Extra::parse_many(it)?,
         })
+    }
+}
+
+#[derive(Default, Debug)]
+pub struct PhysicsSceneCommon {
+    pub gravity: Option<f32>,
+    pub time_step: Option<f32>,
+}
+
+impl PhysicsSceneCommon {
+    pub fn parse<'a>(e: &Element) -> Result<Self> {
+        let mut it = e.children().peekable();
+        let res = Self {
+            gravity: parse_opt("gravity", &mut it, parse_elem)?,
+            time_step: parse_opt("time_step", &mut it, parse_elem)?,
+        };
+        finish(res, it)
     }
 }
 
@@ -2345,7 +2722,10 @@ pub struct PhysicsScene {
     pub id: Option<String>,
     pub name: Option<String>,
     pub asset: Option<Box<Asset>>,
-    // TODO
+    pub instance_force_field: Vec<Instance<ForceField>>,
+    pub instance_physics_model: Vec<Instance<PhysicsModel>>,
+    pub common: PhysicsSceneCommon,
+    pub technique: Vec<Technique>,
     pub extra: Vec<Extra>,
 }
 
@@ -2358,6 +2738,10 @@ impl XNode for PhysicsScene {
             id: element.attr("id").map(Into::into),
             name: element.attr("name").map(Into::into),
             asset: Asset::parse_opt_box(&mut it)?,
+            instance_force_field: Instance::parse_list(&mut it)?,
+            instance_physics_model: Instance::parse_list(&mut it)?,
+            common: parse_one(Technique::COMMON, &mut it, PhysicsSceneCommon::parse)?,
+            technique: Technique::parse_list(&mut it)?,
             extra: Extra::parse_many(it)?,
         })
     }
@@ -2583,20 +2967,37 @@ pub struct Instance<T: Instantiate> {
 
 pub trait Instantiate {
     const INSTANCE: &'static str;
-    type Data;
-    fn parse_data<'a>(it: &mut ElementIter<'a>) -> Result<Self::Data>;
+    type Data: std::fmt::Debug;
+    fn parse_data<'a>(e: &Element, it: &mut ElementIter<'a>) -> Result<Self::Data>;
 }
 
 impl<T: Instantiate> XNode for Instance<T> {
     const NAME: &'static str = T::INSTANCE;
     fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
-        let url = element.attr("url").ok_or("missing url attribute")?;
         let mut it = element.children().peekable();
         Ok(Instance {
-            url: Url::parse(url).map_err(|_| "url parse error")?,
-            data: T::parse_data(&mut it)?,
+            url: parse_attr(element.attr("url"))?.ok_or("missing url attribute")?,
+            data: T::parse_data(element, &mut it)?,
             extra: Extra::parse_many(it)?,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub enum DefInstance<T: Instantiate> {
+    Def(T),
+    Ref(Instance<T>),
+}
+
+impl<T: Instantiate + XNode> DefInstance<T> {
+    fn parse(e: &Element) -> Result<Option<Self>> {
+        Ok(if e.name() == T::NAME {
+            Some(Self::Def(T::parse(e)?))
+        } else if e.name() == T::INSTANCE {
+            Some(Self::Ref(Instance::parse(e)?))
+        } else {
+            None
         })
     }
 }
@@ -2606,7 +3007,7 @@ macro_rules! basic_instance {
         $(impl Instantiate for $ty {
             const INSTANCE: &'static str = $val;
             type Data = ();
-            fn parse_data<'a>(_: &mut ElementIter<'a>) -> Result<Self::Data> {
+            fn parse_data<'a>(_: &Element, _: &mut ElementIter<'a>) -> Result<Self::Data> {
                 Ok(())
             }
         })*
@@ -2615,8 +3016,10 @@ macro_rules! basic_instance {
 basic_instance! {
     Animation => "instance_animation";
     Camera => "instance_camera";
+    ForceField => "instance_force_field";
     Light => "instance_light";
     Node => "instance_node";
+    PhysicsMaterial => "instance_physics_material";
     PhysicsScene => "instance_physics_scene";
     VisualScene => "instance_visual_scene";
 }
@@ -2750,13 +3153,12 @@ impl XNode for InstanceMaterial {
     const NAME: &'static str = "instance_material";
     fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
-        let target = element.attr("target").ok_or("missing target attribute")?;
         let symbol = element.attr("symbol").ok_or("expecting symbol attr")?;
         let mut it = element.children().peekable();
         Ok(InstanceMaterial {
             sid: element.attr("sid").map(Into::into),
             name: element.attr("name").map(Into::into),
-            target: Url::parse(target).map_err(|_| "url parse error")?,
+            target: parse_attr(element.attr("target"))?.ok_or("missing target attribute")?,
             symbol: symbol.into(),
             bind: BindM::parse_list(&mut it)?,
             bind_vertex_input: BindVertexInput::parse_list(&mut it)?,
@@ -2793,7 +3195,7 @@ impl XNode for BindMaterial {
 impl Instantiate for Geometry {
     const INSTANCE: &'static str = "instance_geometry";
     type Data = Option<BindMaterial>;
-    fn parse_data<'a>(it: &mut ElementIter<'a>) -> Result<Self::Data> {
+    fn parse_data<'a>(_: &Element, it: &mut ElementIter<'a>) -> Result<Self::Data> {
         BindMaterial::parse_opt(it)
     }
 }
@@ -2824,7 +3226,7 @@ pub struct ControllerData {
 impl Instantiate for Controller {
     const INSTANCE: &'static str = "instance_controller";
     type Data = ControllerData;
-    fn parse_data<'a>(it: &mut ElementIter<'a>) -> Result<Self::Data> {
+    fn parse_data<'a>(_: &Element, it: &mut ElementIter<'a>) -> Result<Self::Data> {
         Ok(ControllerData {
             skeleton: Skeleton::parse_list(it)?,
             bind_material: BindMaterial::parse_opt(it)?,
@@ -2841,7 +3243,7 @@ pub struct EffectData {
 impl Instantiate for Effect {
     const INSTANCE: &'static str = "instance_effect";
     type Data = EffectData;
-    fn parse_data<'a>(it: &mut ElementIter<'a>) -> Result<Self::Data> {
+    fn parse_data<'a>(_: &Element, it: &mut ElementIter<'a>) -> Result<Self::Data> {
         Ok(EffectData {
             technique_hint: TechniqueHint::parse_list(it)?,
             set_param: SetParam::parse_list(it)?,
