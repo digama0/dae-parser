@@ -182,10 +182,14 @@ pub trait XNode: Sized {
         parse_list(Self::NAME, it, Self::parse)
     }
 
-    fn parse_list1<'a>(it: &mut ElementIter<'a>) -> Result<Vec<Self>> {
+    fn parse_list_n<'a, const N: usize>(it: &mut ElementIter<'a>) -> Result<Vec<Self>> {
         let arr = parse_list(Self::NAME, it, Self::parse)?;
-        if arr.is_empty() {
-            Err(format!("parse error: no {} elements found", Self::NAME))?
+        if arr.len() < N {
+            Err(format!(
+                "parse error: expected {} {} elements",
+                N,
+                Self::NAME
+            ))?
         }
         Ok(arr)
     }
@@ -357,6 +361,7 @@ pub trait ParseLibrary: XNode {
 pub struct Sampler {
     pub id: Option<String>,
     pub inputs: Vec<Input>,
+    pub interpolation: usize,
 }
 
 impl XNode for Sampler {
@@ -364,14 +369,15 @@ impl XNode for Sampler {
     fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
+        let inputs = Input::parse_list(&mut it)?;
         let res = Sampler {
             id: element.attr("id").map(Into::into),
-            inputs: Input::parse_list(&mut it)?,
+            interpolation: inputs
+                .iter()
+                .position(|i| i.semantic == Semantic::Interpolation)
+                .ok_or("sampler: missing INTERPOLATION input")?,
+            inputs,
         };
-        use Semantic::Interpolation;
-        if !res.inputs.iter().any(|i| i.semantic == Interpolation) {
-            Err("sampler: missing INTERPOLATION input")?
-        }
         finish(res, it)
     }
 }
@@ -454,7 +460,7 @@ impl XNode for AnimationClip {
             start: parse_attr(element.attr("start"))?.unwrap_or(0.),
             end: parse_attr(element.attr("end"))?.unwrap_or(0.),
             asset: Asset::parse_opt_box(&mut it)?,
-            instance_animation: Instance::parse_list1(&mut it)?,
+            instance_animation: Instance::parse_list_n::<1>(&mut it)?,
             extra: Extra::parse_many(it)?,
         })
     }
@@ -492,14 +498,10 @@ impl XNode for Joints {
     fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
-        let res = Joints {
-            inputs: Input::parse_list(&mut it)?,
+        Ok(Joints {
+            inputs: Input::parse_list_n::<2>(&mut it)?,
             extra: Extra::parse_many(it)?,
-        };
-        if res.inputs.len() < 2 {
-            Err("joints: expected at least 2 inputs")?
-        }
-        Ok(res)
+        })
     }
 }
 
@@ -507,6 +509,7 @@ impl XNode for Joints {
 pub struct VertexWeights {
     pub count: usize,
     pub inputs: InputList,
+    pub joint: usize,
     pub vcount: Option<Box<[u32]>>,
     pub prim: Option<Box<[u32]>>,
     pub extra: Vec<Extra>,
@@ -517,19 +520,18 @@ impl XNode for VertexWeights {
     fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
+        let inputs = InputList::parse::<2>(&mut it)?;
         let res = VertexWeights {
             count: parse_attr(element.attr("count"))?.ok_or("expected 'count' attr")?,
-            inputs: InputList::parse(&mut it)?,
+            joint: inputs
+                .iter()
+                .position(|i| i.semantic == Semantic::Joint)
+                .ok_or("vertex_weights: missing JOINT input")?,
+            inputs,
             vcount: parse_opt("vcount", &mut it, parse_array)?,
             prim: parse_opt("v", &mut it, parse_array)?,
             extra: Extra::parse_many(it)?,
         };
-        if res.inputs.len() < 2 {
-            Err("vertex_weights: expected at least 2 inputs")?
-        }
-        if !res.inputs.iter().any(|i| i.semantic == Semantic::Joint) {
-            Err("vertex_weights: missing JOINT input")?
-        }
         validate_vcount(
             res.count,
             res.inputs.depth,
@@ -573,8 +575,64 @@ impl XNode for Skin {
 }
 
 #[derive(Debug)]
+pub enum MorphMethod {
+    Normalized,
+    Relative,
+}
+
+impl Default for MorphMethod {
+    fn default() -> Self {
+        Self::Normalized
+    }
+}
+
+impl FromStr for MorphMethod {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "NORMALIZED" => Ok(Self::Normalized),
+            "RELATIVE" => Ok(Self::Relative),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Targets {
+    pub inputs: Vec<Input>,
+    pub morph_target: usize,
+    pub morph_weight: usize,
+    pub extra: Vec<Extra>,
+}
+
+impl XNode for Targets {
+    const NAME: &'static str = "targets";
+    fn parse(element: &Element) -> Result<Self> {
+        debug_assert_eq!(element.name(), Self::NAME);
+        let mut it = element.children().peekable();
+        let inputs = Input::parse_list(&mut it)?;
+        Ok(Targets {
+            morph_target: inputs
+                .iter()
+                .position(|i| i.semantic == Semantic::MorphTarget)
+                .ok_or("targets: missing MORPH_TARGET input")?,
+            morph_weight: inputs
+                .iter()
+                .position(|i| i.semantic == Semantic::MorphWeight)
+                .ok_or("targets: missing MORPH_WEIGHT input")?,
+            inputs,
+            extra: Extra::parse_many(it)?,
+        })
+    }
+}
+
+#[derive(Debug)]
 pub struct Morph {
-    // TODO
+    pub source: Url,
+    pub method: MorphMethod,
+    pub sources: Vec<Source>,
+    pub targets: Targets,
     pub extra: Vec<Extra>,
 }
 
@@ -582,8 +640,13 @@ impl XNode for Morph {
     const NAME: &'static str = "morph";
     fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
-        let it = element.children().peekable();
+        let mut it = element.children().peekable();
+        let src = element.attr("source").ok_or("missing source attr")?;
         Ok(Morph {
+            source: Url::parse(src).map_err(|_| "url parse error")?,
+            method: parse_attr(element.attr("method"))?.unwrap_or_default(),
+            sources: Source::parse_list_n::<2>(&mut it)?,
+            targets: Targets::parse_one(&mut it)?,
             extra: Extra::parse_many(it)?,
         })
     }
@@ -1518,8 +1581,8 @@ impl std::ops::Deref for InputList {
 }
 
 impl InputList {
-    pub fn parse<'a>(it: &mut ElementIter<'a>) -> Result<Self> {
-        let inputs = InputS::parse_list(it)?;
+    pub fn parse<'a, const N: usize>(it: &mut ElementIter<'a>) -> Result<Self> {
+        let inputs = InputS::parse_list_n::<N>(it)?;
         let depth = inputs.iter().map(|i| i.offset).max().map_or(0, |n| n + 1) as usize;
         Ok(InputList { inputs, depth })
     }
@@ -1545,7 +1608,7 @@ impl XNode for Vertices {
         Ok(Vertices {
             id: element.attr("id").ok_or("missing 'id' attr")?.into(),
             name: element.attr("name").map(Into::into),
-            input: Input::parse_list1(&mut it)?,
+            input: Input::parse_list_n::<1>(&mut it)?,
             extra: Extra::parse_many(it)?,
         })
     }
@@ -1576,7 +1639,7 @@ pub trait ParseGeom: Sized {
             name: element.attr("name").map(Into::into),
             material: element.attr("material").map(Into::into),
             count: parse_attr(element.attr("count"))?.ok_or("expected 'count' attr")?,
-            inputs: InputList::parse(&mut it)?,
+            inputs: InputList::parse::<0>(&mut it)?,
             data: Self::parse(&mut it)?,
             extra: Extra::parse_many(it)?,
         };
@@ -1856,7 +1919,7 @@ impl Mesh {
         let mut it = element.children().peekable();
         Ok(Mesh {
             convex,
-            source: Source::parse_list1(&mut it)?,
+            source: Source::parse_list_n::<1>(&mut it)?,
             vertices: Vertices::parse_opt(&mut it)?,
             elements: parse_list_many(&mut it, Primitive::parse)?,
             extra: Extra::parse_many(it)?,
@@ -1883,7 +1946,7 @@ impl XNode for ControlVertices {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
         Ok(ControlVertices {
-            input: Input::parse_list1(&mut it)?,
+            input: Input::parse_list_n::<1>(&mut it)?,
             extra: Extra::parse_many(it)?,
         })
     }
@@ -1904,7 +1967,7 @@ impl XNode for Spline {
         let mut it = element.children().peekable();
         Ok(Spline {
             closed: parse_attr(element.attr("closed"))?.unwrap_or(false),
-            source: Source::parse_list1(&mut it)?,
+            source: Source::parse_list_n::<1>(&mut it)?,
             controls: ControlVertices::parse_one(&mut it)?,
             extra: Extra::parse_many(it)?,
         })
@@ -2278,7 +2341,7 @@ impl XNode for VisualScene {
             id: element.attr("id").map(Into::into),
             name: element.attr("name").map(Into::into),
             asset: Asset::parse_opt_box(&mut it)?,
-            nodes: Node::parse_list1(&mut it)?,
+            nodes: Node::parse_list_n::<1>(&mut it)?,
             extra: Extra::parse_many(it)?,
         })
     }
@@ -2298,7 +2361,7 @@ impl<T: ParseLibrary> XNode for Library<T> {
         let mut it = element.children().peekable();
         Ok(Library {
             asset: Asset::parse_opt_box(&mut it)?,
-            items: T::parse_list1(&mut it)?,
+            items: T::parse_list_n::<1>(&mut it)?,
             extra: Extra::parse_many(it)?,
         })
     }
@@ -2551,7 +2614,7 @@ impl XNode for BindMaterial {
             param: Param::parse_list(&mut it)?,
             instance_material: parse_one(Technique::COMMON, &mut it, |e| {
                 let mut it = e.children().peekable();
-                finish(InstanceMaterial::parse_list1(&mut it)?, it)
+                finish(InstanceMaterial::parse_list_n::<1>(&mut it)?, it)
             })?,
             technique: Technique::parse_list(&mut it)?,
             extra: Extra::parse_many(it)?,
