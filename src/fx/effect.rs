@@ -22,6 +22,12 @@ pub struct Effect {
     pub extra: Vec<Extra>,
 }
 
+impl HasId for Effect {
+    fn id(&self) -> Option<&str> {
+        Some(&self.id)
+    }
+}
+
 impl XNode for Effect {
     const NAME: &'static str = "effect";
     fn parse(element: &Element) -> Result<Self> {
@@ -114,6 +120,12 @@ pub struct TechniqueFx<T> {
     pub data: T,
     /// Provides arbitrary additional information about this element.
     pub extra: Vec<Extra>,
+}
+
+impl<T> HasId for TechniqueFx<T> {
+    fn id(&self) -> Option<&str> {
+        self.id.as_deref()
+    }
 }
 
 impl<T: ProfileData> XNode for TechniqueFx<T> {

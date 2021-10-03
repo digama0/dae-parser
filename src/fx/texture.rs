@@ -31,6 +31,12 @@ pub struct Image {
     pub extra: Vec<Extra>,
 }
 
+impl HasId for Image {
+    fn id(&self) -> Option<&str> {
+        self.id.as_deref()
+    }
+}
+
 impl XNode for Image {
     const NAME: &'static str = "image";
     fn parse(element: &Element) -> Result<Self> {

@@ -127,6 +127,12 @@ pub struct Source {
     pub technique: Vec<Technique>,
 }
 
+impl HasId for Source {
+    fn id(&self) -> Option<&str> {
+        self.id.as_deref()
+    }
+}
+
 impl XNode for Source {
     const NAME: &'static str = "source";
     fn parse(element: &Element) -> Result<Self> {

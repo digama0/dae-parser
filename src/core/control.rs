@@ -15,6 +15,12 @@ pub struct Controller {
     pub extra: Vec<Extra>,
 }
 
+impl HasId for Controller {
+    fn id(&self) -> Option<&str> {
+        self.id.as_deref()
+    }
+}
+
 impl XNode for Controller {
     const NAME: &'static str = "controller";
     fn parse(element: &Element) -> Result<Self> {
@@ -69,6 +75,22 @@ impl ControlElement {
             _ => Ok(None),
         }
     }
+
+    /// The `source` URL field on this element.
+    pub fn source(&self) -> &Url {
+        match self {
+            ControlElement::Skin(skin) => &skin.source,
+            ControlElement::Morph(morph) => &morph.source,
+        }
+    }
+
+    /// The `sources` field, which gives the list of [`Source`] elements on this element.
+    pub fn sources(&self) -> &[Source] {
+        match self {
+            ControlElement::Skin(skin) => &skin.sources,
+            ControlElement::Morph(morph) => &morph.sources,
+        }
+    }
 }
 
 /// Declares the association between joint nodes and attribute data.
@@ -100,6 +122,13 @@ impl XNode for Joints {
             inputs,
             extra: Extra::parse_many(it)?,
         })
+    }
+}
+
+impl Joints {
+    /// The input with [`Semantic::Joint`].
+    pub fn joint_input(&self) -> &Input {
+        &self.inputs[self.joint]
     }
 }
 
@@ -241,6 +270,18 @@ impl XNode for Targets {
     }
 }
 
+impl Targets {
+    /// The input with [`Semantic::MorphTarget`].
+    pub fn morph_target_input(&self) -> &Input {
+        &self.inputs[self.morph_target]
+    }
+
+    /// The input with [`Semantic::MorphWeight`].
+    pub fn morph_weight_input(&self) -> &Input {
+        &self.inputs[self.morph_weight]
+    }
+}
+
 /// Describes the combination of joints and weights used by a skin.
 #[derive(Clone, Debug)]
 pub struct VertexWeights {
@@ -286,5 +327,12 @@ impl XNode for VertexWeights {
             res.prim.as_deref(),
         )?;
         Ok(res)
+    }
+}
+
+impl VertexWeights {
+    /// The input with [`Semantic::Joint`].
+    pub fn joint_input(&self) -> &Input {
+        &self.inputs[self.joint]
     }
 }

@@ -17,6 +17,12 @@ pub struct Light {
     pub extra: Vec<Extra>,
 }
 
+impl HasId for Light {
+    fn id(&self) -> Option<&str> {
+        self.id.as_deref()
+    }
+}
+
 impl XNode for Light {
     const NAME: &'static str = "light";
     fn parse(element: &Element) -> Result<Self> {

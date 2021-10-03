@@ -50,21 +50,27 @@
 //! </COLLADA>"##;
 //!
 //! let document = Document::from_str(dae_file).unwrap();
-//! if let LibraryElement::Geometries(lib) = &document.library[0] {
-//!     let geom = &lib.items[0];
-//!     assert_eq!(geom.id.as_ref().unwrap(), "Cube-mesh");
-//!     if let GeometryElement::Mesh(mesh) = &geom.element {
-//!         assert_eq!(mesh.source[0].id.as_ref().unwrap(), "Cube-mesh-positions");
-//!         if let Primitive::Triangles(tris) = &mesh.elements[0] {
-//!             assert_eq!(
-//!                 tris.data.as_deref().unwrap(),
-//!                 &[3, 1, 0, 1, 5, 2, 3, 4, 1, 1, 4, 5]
-//!             );
-//!             return;
-//!         }
-//!     }
-//! }
-//! panic!() // ensure that the `if let`s above are taken
+//! let cube = document.local_map::<Geometry>().unwrap().get("Cube-mesh").unwrap();
+//! let sources_map = document.local_map::<Source>().unwrap();
+//! let vertices_map = document.local_map::<Vertices>().unwrap();
+//! // sources.get("Cube-mesh-positions").unwrap();
+//! assert_eq!(cube.id.as_ref().unwrap(), "Cube-mesh");
+//! let tris = if let GeometryElement::Mesh(mesh) = &cube.element {
+//!     if let Primitive::Triangles(tris) = &mesh.elements[0] {
+//!         tris
+//!     } else { panic!() }
+//! } else { panic!() };
+//! assert_eq!(
+//!     tris.data.as_deref().unwrap(),
+//!     &[3, 1, 0, 1, 5, 2, 3, 4, 1, 1, 4, 5]
+//! );
+//! assert_eq!(tris.inputs[0].semantic, Semantic::Vertex);
+//! let vertices = vertices_map.get_url(&tris.inputs[0].source).unwrap();
+//! assert_eq!(vertices.id, "Cube-mesh-vertices");
+//! let source = sources_map
+//!     .get_url(&vertices.position_input().source)
+//!     .unwrap();
+//! assert_eq!(source.id.as_deref(), Some("Cube-mesh-positions"));
 //! ```
 
 #![forbid(unsafe_code)]
@@ -99,6 +105,7 @@ macro_rules! mk_extensible_enum {
     };
 }
 
+mod api;
 mod core;
 mod fx;
 mod physics;
@@ -330,6 +337,18 @@ pub trait XNode: Sized {
         }
         Ok(arr)
     }
+}
+
+/// A generic ID getter function.
+pub trait HasId {
+    /// Get the ID of the node.
+    fn id(&self) -> Option<&str>;
+}
+
+/// A generic scoped ID getter function.
+pub trait HasSId {
+    /// Get the sid of the node.
+    fn sid(&self) -> Option<&str>;
 }
 
 /// A Collada document. Represents the `<COLLADA>` root node.

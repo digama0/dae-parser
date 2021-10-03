@@ -23,6 +23,12 @@ pub struct PhysicsScene {
     pub extra: Vec<Extra>,
 }
 
+impl HasId for PhysicsScene {
+    fn id(&self) -> Option<&str> {
+        self.id.as_deref()
+    }
+}
+
 impl XNode for PhysicsScene {
     const NAME: &'static str = "physics_scene";
     fn parse(element: &Element) -> Result<Self> {
@@ -85,6 +91,12 @@ pub struct ForceField {
     pub technique: Vec<Technique>,
     /// Provides arbitrary additional information about this element.
     pub extra: Vec<Extra>,
+}
+
+impl HasId for ForceField {
+    fn id(&self) -> Option<&str> {
+        self.id.as_deref()
+    }
 }
 
 impl XNode for ForceField {

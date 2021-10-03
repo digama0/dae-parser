@@ -22,6 +22,12 @@ pub struct Animation {
     pub extra: Vec<Extra>,
 }
 
+impl HasId for Animation {
+    fn id(&self) -> Option<&str> {
+        self.id.as_deref()
+    }
+}
+
 impl XNode for Animation {
     const NAME: &'static str = "animation";
     fn parse(element: &Element) -> Result<Self> {
@@ -68,6 +74,12 @@ pub struct AnimationClip {
     pub instance_animation: Vec<Instance<Animation>>,
     /// Provides arbitrary additional information about this element.
     pub extra: Vec<Extra>,
+}
+
+impl HasId for AnimationClip {
+    fn id(&self) -> Option<&str> {
+        self.id.as_deref()
+    }
 }
 
 impl XNode for AnimationClip {
@@ -119,6 +131,12 @@ pub struct Sampler {
     pub interpolation: usize,
 }
 
+impl HasId for Sampler {
+    fn id(&self) -> Option<&str> {
+        self.id.as_deref()
+    }
+}
+
 impl XNode for Sampler {
     const NAME: &'static str = "sampler";
     fn parse(element: &Element) -> Result<Self> {
@@ -134,5 +152,12 @@ impl XNode for Sampler {
             inputs,
         };
         finish(res, it)
+    }
+}
+
+impl Sampler {
+    /// The input with [`Semantic::Interpolation`].
+    pub fn interpolation_input(&self) -> &Input {
+        &self.inputs[self.interpolation]
     }
 }

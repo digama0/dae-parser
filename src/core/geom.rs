@@ -15,6 +15,12 @@ pub struct Geometry {
     pub extra: Vec<Extra>,
 }
 
+impl HasId for Geometry {
+    fn id(&self) -> Option<&str> {
+        self.id.as_deref()
+    }
+}
+
 impl XNode for Geometry {
     const NAME: &'static str = "geometry";
     fn parse(element: &Element) -> Result<Self> {
@@ -71,6 +77,15 @@ impl GeometryElement {
             _ => return Ok(None),
         }))
     }
+
+    /// The `sources` field, which gives the list of [`Source`] elements on this element.
+    pub fn sources(&self) -> &[Source] {
+        match self {
+            GeometryElement::ConvexHullOf(_) => &[],
+            GeometryElement::Mesh(mesh) => &mesh.sources,
+            GeometryElement::Spline(spline) => &spline.sources,
+        }
+    }
 }
 
 /// Describes basic geometric meshes using vertex and primitive information.
@@ -80,7 +95,7 @@ pub struct Mesh {
     /// Both elements have the same structure otherwise.
     pub convex: bool,
     /// Provides the bulk of the mesh’s vertex data.
-    pub source: Vec<Source>,
+    pub sources: Vec<Source>,
     /// Describes the mesh-vertex attributes and establishes their topological identity.
     pub vertices: Option<Vertices>,
     /// Geometric primitives, which assemble values from the
@@ -112,7 +127,7 @@ impl Mesh {
         let mut it = element.children().peekable();
         Ok(Mesh {
             convex,
-            source: Source::parse_list_n::<1>(&mut it)?,
+            sources: Source::parse_list_n::<1>(&mut it)?,
             vertices: Vertices::parse_opt(&mut it)?,
             elements: parse_list_many(&mut it, Primitive::parse)?,
             extra: Extra::parse_many(it)?,
@@ -143,6 +158,12 @@ pub struct Vertices {
     pub extra: Vec<Extra>,
 }
 
+impl HasId for Vertices {
+    fn id(&self) -> Option<&str> {
+        Some(&self.id)
+    }
+}
+
 impl XNode for Vertices {
     const NAME: &'static str = "vertices";
     fn parse(element: &Element) -> Result<Self> {
@@ -159,6 +180,13 @@ impl XNode for Vertices {
             inputs,
             extra: Extra::parse_many(it)?,
         })
+    }
+}
+
+impl Vertices {
+    /// The input with [`Semantic::Position`].
+    pub fn position_input(&self) -> &Input {
+        &self.inputs[self.position]
     }
 }
 
@@ -614,7 +642,7 @@ pub struct Spline {
     /// The default is "false", indicating that the spline is open.
     pub closed: bool,
     /// Provides the values for the CVs and segments of the spline.
-    pub source: Vec<Source>,
+    pub sources: Vec<Source>,
     /// Describes the CVs of the spline.
     pub controls: ControlVertices,
     /// Provides arbitrary additional information about this element.
@@ -628,7 +656,7 @@ impl XNode for Spline {
         let mut it = element.children().peekable();
         Ok(Spline {
             closed: parse_attr(element.attr("closed"))?.unwrap_or(false),
-            source: Source::parse_list_n::<1>(&mut it)?,
+            sources: Source::parse_list_n::<1>(&mut it)?,
             controls: ControlVertices::parse_one(&mut it)?,
             extra: Extra::parse_many(it)?,
         })
@@ -660,5 +688,12 @@ impl XNode for ControlVertices {
             inputs,
             extra: Extra::parse_many(it)?,
         })
+    }
+}
+
+impl ControlVertices {
+    /// The input with [`Semantic::Position`].
+    pub fn position_input(&self) -> &Input {
+        &self.inputs[self.position]
     }
 }

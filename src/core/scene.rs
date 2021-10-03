@@ -45,6 +45,12 @@ pub struct VisualScene {
     pub extra: Vec<Extra>,
 }
 
+impl HasId for VisualScene {
+    fn id(&self) -> Option<&str> {
+        self.id.as_deref()
+    }
+}
+
 impl XNode for VisualScene {
     const NAME: &'static str = "visual_scene";
     fn parse(element: &Element) -> Result<Self> {
@@ -90,6 +96,12 @@ pub struct Node {
     pub children: Vec<Node>,
     /// Provides arbitrary additional information about this element.
     pub extra: Vec<Extra>,
+}
+
+impl HasId for Node {
+    fn id(&self) -> Option<&str> {
+        self.id.as_deref()
+    }
 }
 
 impl XNode for Node {

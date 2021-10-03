@@ -16,6 +16,12 @@ pub struct Material {
     pub extra: Vec<Extra>,
 }
 
+impl HasId for Material {
+    fn id(&self) -> Option<&str> {
+        self.id.as_deref()
+    }
+}
+
 impl XNode for Material {
     const NAME: &'static str = "material";
     fn parse(element: &Element) -> Result<Self> {

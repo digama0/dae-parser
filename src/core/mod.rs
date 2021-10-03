@@ -27,6 +27,9 @@ pub trait ParseLibrary: XNode {
     /// `LIBRARY = "library_geometries"`,
     /// and the corresponding library type is [`Library`]`<Geometry>`.
     const LIBRARY: &'static str;
+
+    /// Extract the library from a single [`LibraryElement`].
+    fn extract_element(e: &LibraryElement) -> Option<&Library<Self>>;
 }
 
 /// Declares a module of elements of type `T`.
@@ -57,6 +60,14 @@ macro_rules! mk_libraries {
     ($($(#[$doc:meta])* $name:ident($arg:ident) = $s:literal,)*) => {
         $(impl ParseLibrary for $arg {
             const LIBRARY: &'static str = $s;
+
+            fn extract_element(e: &LibraryElement) -> Option<&Library<Self>> {
+                if let LibraryElement::$name(arg) = e {
+                    Some(arg)
+                } else {
+                    None
+                }
+            }
         })*
 
         /// A library element, which can be a module of any of the kinds supported by COLLADA.
