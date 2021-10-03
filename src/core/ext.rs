@@ -50,7 +50,7 @@ impl Extra {
 
 /// Declares the information used to process some portion of the content.
 /// Each technique conforms to an associated profile.
-/// In the COLLADA spec, this element is called "<technique> (core)".
+/// In the COLLADA spec, this element is called "`<technique>` (core)".
 #[derive(Clone, Debug)]
 pub struct Technique {
     /// The `<technique>` element can contain any well-formed XML data.

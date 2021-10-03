@@ -112,7 +112,7 @@ impl XNode for BindMaterial {
 
 /// Binds values to uniform inputs of a shader or binds values to effect
 /// parameters upon instantiation.
-/// In the COLLADA spec, this element is called "<bind> (material)".
+/// In the COLLADA spec, this element is called "`<bind>` (material)".
 #[derive(Clone, Debug)]
 pub struct BindM {
     /// Which effect parameter to bind.
