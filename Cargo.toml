@@ -1,6 +1,6 @@
 [package]
 name = "dae-parser"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Mario Carneiro <di.gama@gmail.com>"]
 edition = "2018"
 description = "Parser for the Collada (DAE) format"
@@ -8,7 +8,7 @@ repository = "https://github.com/digama0/dae-parser"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
 keywords = ["collada", "3d", "format"]
-categories = ["parser implementations", "graphics", "game development"]
+categories = ["parser-implementations", "graphics", "game-development"]
 
 [dependencies]
 minidom = "0.13"
