@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 mod url;
 
 pub use crate::url::Url;
@@ -87,7 +89,7 @@ fn parse_one<'a, T>(
 ) -> Result<T> {
     let e = it.next().ok_or_else(|| format!("expected <{}>", name))?;
     if e.name() != name {
-        Err(format!("expected <{}>", name))?
+        return Err(format!("expected <{}>", name).into());
     }
     f(e)
 }
@@ -96,8 +98,8 @@ fn parse_one_many<'a, T>(
     it: &mut impl Iterator<Item = &'a Element>,
     f: impl FnOnce(&'a Element) -> Result<Option<T>>,
 ) -> Result<T> {
-    let e = it.next().ok_or_else(|| "expected element")?;
-    Ok(f(e)?.ok_or_else(|| "expected element")?)
+    let e = it.next().ok_or("expected element")?;
+    Ok(f(e)?.ok_or("expected element")?)
 }
 
 fn parse_opt<'a, T>(
@@ -141,7 +143,7 @@ fn parse_list<'a, T>(
 
 fn finish<'a, T>(t: T, mut it: impl Iterator<Item = &'a Element>) -> Result<T> {
     if let Some(e) = it.next() {
-        Err(format!("unexpected node <{}>", e.name()))?
+        return Err(format!("unexpected node <{}>", e.name()).into());
     }
     Ok(t)
 }
@@ -165,7 +167,7 @@ pub trait XNode: Sized {
     const NAME: &'static str;
     fn parse(element: &Element) -> Result<Self>;
 
-    fn parse_box<'a>(element: &Element) -> Result<Box<Self>> {
+    fn parse_box(element: &Element) -> Result<Box<Self>> {
         Self::parse(element).map(Box::new)
     }
 
@@ -173,26 +175,22 @@ pub trait XNode: Sized {
         parse_one(Self::NAME, it, Self::parse)
     }
 
-    fn parse_opt<'a>(it: &mut ElementIter<'a>) -> Result<Option<Self>> {
+    fn parse_opt(it: &mut ElementIter<'_>) -> Result<Option<Self>> {
         parse_opt(Self::NAME, it, Self::parse)
     }
 
-    fn parse_opt_box<'a>(it: &mut ElementIter<'a>) -> Result<Option<Box<Self>>> {
+    fn parse_opt_box(it: &mut ElementIter<'_>) -> Result<Option<Box<Self>>> {
         parse_opt(Self::NAME, it, Self::parse_box)
     }
 
-    fn parse_list<'a>(it: &mut ElementIter<'a>) -> Result<Vec<Self>> {
+    fn parse_list(it: &mut ElementIter<'_>) -> Result<Vec<Self>> {
         parse_list(Self::NAME, it, Self::parse)
     }
 
-    fn parse_list_n<'a, const N: usize>(it: &mut ElementIter<'a>) -> Result<Vec<Self>> {
+    fn parse_list_n<const N: usize>(it: &mut ElementIter<'_>) -> Result<Vec<Self>> {
         let arr = parse_list(Self::NAME, it, Self::parse)?;
         if arr.len() < N {
-            Err(format!(
-                "parse error: expected {} {} elements",
-                N,
-                Self::NAME
-            ))?
+            return Err(format!("parse error: expected {} {} elements", N, Self::NAME).into());
         }
         Ok(arr)
     }
@@ -229,7 +227,7 @@ impl Extra {
         for e in it {
             match e.name() {
                 "extra" => extras.push(Extra::parse(e)?),
-                k => Err(format!("unexpected element {}", k))?,
+                k => return Err(format!("unexpected element {}", k).into()),
             }
         }
         Ok(extras)
@@ -311,7 +309,7 @@ impl XNode for UpAxis {
             Some("X_UP") => UpAxis::XUp,
             Some("Y_UP") => UpAxis::YUp,
             Some("Z_UP") => UpAxis::ZUp,
-            _ => Err("invalid <up_axis> value")?,
+            _ => return Err("invalid <up_axis> value".into()),
         })
     }
 }
@@ -431,10 +429,10 @@ impl XNode for Animation {
             extra: Extra::parse_many(it)?,
         };
         if res.children.is_empty() && res.sampler.is_empty() {
-            Err("animation: no sampler/channel or children")?
+            return Err("animation: no sampler/channel or children".into());
         }
         if res.sampler.is_empty() != res.channel.is_empty() {
-            Err("animation: sampler and channel must be used together")?
+            return Err("animation: sampler and channel must be used together".into());
         }
         Ok(res)
     }
@@ -682,7 +680,7 @@ impl XNode for Skin {
             extra: Extra::parse_many(it)?,
         };
         if res.sources.len() < 3 {
-            Err("expected at least 3 skin sources")?
+            return Err("expected at least 3 skin sources".into());
         }
         Ok(res)
     }
@@ -1139,11 +1137,11 @@ impl<T: ProfileData> XNode for TechniqueFx<T> {
 }
 
 pub trait ProfileData: Sized {
-    fn parse<'a>(it: &mut ElementIter<'a>) -> Result<Self>;
+    fn parse(it: &mut ElementIter<'_>) -> Result<Self>;
 }
 
 impl ImageParam {
-    fn parse_list<'a>(it: &mut ElementIter<'a>) -> Result<Vec<Self>> {
+    fn parse_list(it: &mut ElementIter<'_>) -> Result<Vec<Self>> {
         parse_list_many(it, |e| {
             Ok(Some(match e.name() {
                 Image::NAME => Self::Image(Image::parse(e)?),
@@ -1363,7 +1361,7 @@ pub struct CommonData {
 }
 
 impl ProfileData for CommonData {
-    fn parse<'a>(it: &mut ElementIter<'a>) -> Result<Self> {
+    fn parse(it: &mut ElementIter<'_>) -> Result<Self> {
         Ok(CommonData {
             image_param: ImageParam::parse_list(it)?,
             shaders: parse_list_many(it, Shader::parse)?,
@@ -1483,7 +1481,7 @@ impl XNode for Effect {
             extra: Extra::parse_many(it)?,
         };
         if res.profile.is_empty() {
-            Err("expected at least one profile")?
+            return Err("expected at least one profile".into());
         }
         Ok(res)
     }
@@ -1532,7 +1530,7 @@ fn parse_array_count<T: FromStr>(e: &Element) -> Result<Box<[T]>> {
         vec.push(s.parse().map_err(|_| "parse error")?)
     }
     if vec.len() != count {
-        Err("'count' does not match array length")?
+        return Err("'count' does not match array length".into());
     }
     Ok(vec.into())
 }
@@ -1603,7 +1601,7 @@ impl XNode for Accessor {
             param: Param::parse_list(&mut it)?,
         };
         if res.stride < res.param.len() {
-            Err("accessor stride does not match params")?
+            return Err("accessor stride does not match params".into());
         }
         finish(res, it)
     }
@@ -1738,7 +1736,7 @@ impl std::ops::Deref for InputList {
 }
 
 impl InputList {
-    pub fn parse<'a, const N: usize>(it: &mut ElementIter<'a>) -> Result<Self> {
+    pub fn parse<const N: usize>(it: &mut ElementIter<'_>) -> Result<Self> {
         let inputs = InputS::parse_list_n::<N>(it)?;
         let depth = inputs.iter().map(|i| i.offset).max().map_or(0, |n| n + 1) as usize;
         Ok(InputList { inputs, depth })
@@ -1783,7 +1781,7 @@ pub struct Geom<T> {
 
 pub trait ParseGeom: Default {
     const NAME: &'static str;
-    fn parse<'a>(it: &mut ElementIter<'a>) -> Result<Self>;
+    fn parse(it: &mut ElementIter<'_>) -> Result<Self>;
 
     fn validate(_: &Geom<Self>) -> Result<()> {
         Ok(())
@@ -1815,14 +1813,14 @@ pub type Lines = Geom<LineGeom>;
 impl ParseGeom for LineGeom {
     const NAME: &'static str = "lines";
 
-    fn parse<'a>(it: &mut ElementIter<'a>) -> Result<Self> {
+    fn parse(it: &mut ElementIter<'_>) -> Result<Self> {
         Ok(LineGeom(parse_opt("p", it, parse_array)?))
     }
 
     fn validate(res: &Geom<Self>) -> Result<()> {
         if let Some(ref data) = res.data.0 {
             if res.inputs.depth * 2 * res.count != data.len() {
-                Err("line count does not match <p> field")?
+                return Err("line count does not match <p> field".into());
             }
         }
         Ok(())
@@ -1836,16 +1834,16 @@ pub type LineStrips = Geom<LineStripGeom>;
 impl ParseGeom for LineStripGeom {
     const NAME: &'static str = "line_strips";
 
-    fn parse<'a>(it: &mut ElementIter<'a>) -> Result<Self> {
+    fn parse(it: &mut ElementIter<'_>) -> Result<Self> {
         Ok(LineStripGeom(parse_list("p", it, parse_array)?))
     }
 
     fn validate(res: &Geom<Self>) -> Result<()> {
         if res.count != res.data.0.len() {
-            Err("line strip count does not match <p> fields")?
+            return Err("line strip count does not match <p> fields".into());
         }
         if !res.data.0.iter().all(|p| res.inputs.check_prim::<2>(p)) {
-            Err("incorrect <p> field in line strips")?
+            return Err("incorrect <p> field in line strips".into());
         }
         Ok(())
     }
@@ -1864,7 +1862,7 @@ pub type Polygons = Geom<PolygonGeom>;
 impl ParseGeom for PolygonGeom {
     const NAME: &'static str = "polygon";
 
-    fn parse<'a>(it: &mut ElementIter<'a>) -> Result<Self> {
+    fn parse(it: &mut ElementIter<'_>) -> Result<Self> {
         let mut polys = parse_list("p", it, |e| {
             Ok(PolygonHole {
                 verts: parse_array(e)?,
@@ -1876,7 +1874,9 @@ impl ParseGeom for PolygonGeom {
             let verts = parse_one("p", &mut it, parse_array)?;
             let hole = parse_list("h", &mut it, parse_array)?;
             if hole.is_empty() {
-                Err("<ph> element can only be used when at least one hole is present")?
+                return Err(
+                    "<ph> element can only be used when at least one hole is present".into(),
+                );
             }
             finish(PolygonHole { verts, hole }, it)
         })?;
@@ -1886,13 +1886,13 @@ impl ParseGeom for PolygonGeom {
 
     fn validate(res: &Geom<Self>) -> Result<()> {
         if res.count != res.data.0.len() {
-            Err("polygon count does not match <p> fields")?
+            return Err("polygon count does not match <p> fields".into());
         }
         if !res.data.0.iter().all(|ph| {
             res.inputs.check_prim::<3>(&ph.verts)
                 && ph.hole.iter().all(|h| res.inputs.check_prim::<3>(h))
         }) {
-            Err("incorrect <p> field in polygon")?
+            return Err("incorrect <p> field in polygon".into());
         }
         Ok(())
     }
@@ -1915,13 +1915,13 @@ fn validate_vcount(
         (None, None) => {}
         (Some(vcount), Some(data)) => {
             if count != vcount.len() {
-                Err("count does not match <vcount> field")?
+                return Err("count does not match <vcount> field".into());
             }
             if depth * vcount.iter().sum::<u32>() as usize != data.len() {
-                Err("vcount does not match <p>/<v> field")?
+                return Err("vcount does not match <p>/<v> field".into());
             }
         }
-        _ => Err("<vcount> and <p>/<v> should be provided together")?,
+        _ => return Err("<vcount> and <p>/<v> should be provided together".into()),
     }
     Ok(())
 }
@@ -1929,7 +1929,7 @@ fn validate_vcount(
 impl ParseGeom for PolyListGeom {
     const NAME: &'static str = "polylist";
 
-    fn parse<'a>(it: &mut ElementIter<'a>) -> Result<Self> {
+    fn parse(it: &mut ElementIter<'_>) -> Result<Self> {
         Ok(PolyListGeom {
             vcount: parse_opt("vcount", it, parse_array)?,
             prim: parse_opt("p", it, parse_array)?,
@@ -1953,14 +1953,14 @@ pub type Triangles = Geom<TriangleGeom>;
 impl ParseGeom for TriangleGeom {
     const NAME: &'static str = "triangles";
 
-    fn parse<'a>(it: &mut ElementIter<'a>) -> Result<Self> {
+    fn parse(it: &mut ElementIter<'_>) -> Result<Self> {
         Ok(TriangleGeom(parse_opt("p", it, parse_array)?))
     }
 
     fn validate(res: &Geom<Self>) -> Result<()> {
         if let Some(ref data) = res.data.0 {
             if res.inputs.depth * 3 * res.count != data.len() {
-                Err("triangle count does not match <p> field")?
+                return Err("triangle count does not match <p> field".into());
             }
         }
         Ok(())
@@ -1974,16 +1974,16 @@ pub type TriFans = Geom<TriFanGeom>;
 impl ParseGeom for TriFanGeom {
     const NAME: &'static str = "trifans";
 
-    fn parse<'a>(it: &mut ElementIter<'a>) -> Result<Self> {
+    fn parse(it: &mut ElementIter<'_>) -> Result<Self> {
         Ok(TriFanGeom(parse_list("p", it, parse_array)?))
     }
 
     fn validate(res: &Geom<Self>) -> Result<()> {
         if res.count != res.data.0.len() {
-            Err("triangle fan count does not match <p> fields")?
+            return Err("triangle fan count does not match <p> fields".into());
         }
         if !res.data.0.iter().all(|p| res.inputs.check_prim::<3>(p)) {
-            Err("incorrect <p> field in triangle fans")?
+            return Err("incorrect <p> field in triangle fans".into());
         }
         Ok(())
     }
@@ -1996,16 +1996,16 @@ pub type TriStrips = Geom<TriStripGeom>;
 impl ParseGeom for TriStripGeom {
     const NAME: &'static str = "tristrips";
 
-    fn parse<'a>(it: &mut ElementIter<'a>) -> Result<Self> {
+    fn parse(it: &mut ElementIter<'_>) -> Result<Self> {
         Ok(TriStripGeom(parse_list("p", it, parse_array)?))
     }
 
     fn validate(res: &Geom<Self>) -> Result<()> {
         if res.count != res.data.0.len() {
-            Err("triangle strip count does not match <p> fields")?
+            return Err("triangle strip count does not match <p> fields".into());
         }
         if !res.data.0.iter().all(|p| res.inputs.check_prim::<3>(p)) {
-            Err("incorrect <p> field in triangle strips")?
+            return Err("incorrect <p> field in triangle strips".into());
         }
         Ok(())
     }
@@ -2455,7 +2455,7 @@ pub struct RigidBodyCommon {
 }
 
 impl RigidBodyCommon {
-    fn parse<'a>(mut it: ElementIter<'a>) -> Result<Self> {
+    fn parse(mut it: ElementIter<'_>) -> Result<Self> {
         let res = Self {
             dynamic: parse_opt("dynamic", &mut it, parse_elem)?,
             mass: parse_opt("mass", &mut it, parse_elem)?,
@@ -2804,7 +2804,7 @@ pub struct Limits {
     pub max: Option<Box<[f32; 3]>>,
 }
 impl Limits {
-    pub fn parse<'a>(e: &Element) -> Result<Self> {
+    pub fn parse(e: &Element) -> Result<Self> {
         let mut it = e.children().peekable();
         let res = Self {
             min: parse_opt("min", &mut it, parse_array_n)?,
@@ -2832,7 +2832,7 @@ impl Default for Spring {
 }
 
 impl Spring {
-    pub fn parse<'a>(e: &Element) -> Result<Self> {
+    pub fn parse(e: &Element) -> Result<Self> {
         let mut it = e.children().peekable();
         let res = Self {
             stiffness: parse_opt("stiffness", &mut it, parse_elem)?.unwrap_or(1.),
@@ -2854,7 +2854,7 @@ pub struct RigidConstraintCommon {
 }
 
 impl RigidConstraintCommon {
-    pub fn parse<'a>(e: &Element) -> Result<Self> {
+    pub fn parse(e: &Element) -> Result<Self> {
         let mut it = e.children().peekable();
         let enabled = parse_opt("enabled", &mut it, parse_elem)?.unwrap_or(true);
         let interpenetrate = parse_opt("interpenetrate", &mut it, parse_elem)?.unwrap_or(false);
@@ -2944,7 +2944,7 @@ pub struct PhysicsModelData {
 impl Instantiate for PhysicsModel {
     const INSTANCE: &'static str = "instance_physics_model";
     type Data = PhysicsModelData;
-    fn parse_data<'a>(e: &Element, it: &mut ElementIter<'a>) -> Result<Self::Data> {
+    fn parse_data(e: &Element, it: &mut ElementIter<'_>) -> Result<Self::Data> {
         Ok(PhysicsModelData {
             parent: parse_attr(e.attr("parent"))?,
             instance_force_field: Instance::parse_list(it)?,
@@ -2989,7 +2989,7 @@ pub struct PhysicsSceneCommon {
 }
 
 impl PhysicsSceneCommon {
-    pub fn parse<'a>(e: &Element) -> Result<Self> {
+    pub fn parse(e: &Element) -> Result<Self> {
         let mut it = e.children().peekable();
         let res = Self {
             gravity: parse_opt("gravity", &mut it, parse_elem)?,
@@ -3250,7 +3250,7 @@ pub struct Instance<T: Instantiate> {
 pub trait Instantiate {
     const INSTANCE: &'static str;
     type Data: std::fmt::Debug;
-    fn parse_data<'a>(e: &Element, it: &mut ElementIter<'a>) -> Result<Self::Data>;
+    fn parse_data(e: &Element, it: &mut ElementIter<'_>) -> Result<Self::Data>;
 }
 
 impl<T: Instantiate> XNode for Instance<T> {
@@ -3289,7 +3289,7 @@ macro_rules! basic_instance {
         $(impl Instantiate for $ty {
             const INSTANCE: &'static str = $val;
             type Data = ();
-            fn parse_data<'a>(_: &Element, _: &mut ElementIter<'a>) -> Result<Self::Data> {
+            fn parse_data(_: &Element, _: &mut ElementIter<'_>) -> Result<Self::Data> {
                 Ok(())
             }
         })*
@@ -3462,7 +3462,7 @@ impl XNode for BindMaterial {
 impl Instantiate for Geometry {
     const INSTANCE: &'static str = "instance_geometry";
     type Data = Option<BindMaterial>;
-    fn parse_data<'a>(_: &Element, it: &mut ElementIter<'a>) -> Result<Self::Data> {
+    fn parse_data(_: &Element, it: &mut ElementIter<'_>) -> Result<Self::Data> {
         BindMaterial::parse_opt(it)
     }
 }
@@ -3476,7 +3476,7 @@ pub struct ControllerData {
 impl Instantiate for Controller {
     const INSTANCE: &'static str = "instance_controller";
     type Data = ControllerData;
-    fn parse_data<'a>(_: &Element, it: &mut ElementIter<'a>) -> Result<Self::Data> {
+    fn parse_data(_: &Element, it: &mut ElementIter<'_>) -> Result<Self::Data> {
         Ok(ControllerData {
             skeleton: parse_list("skeleton", it, parse_elem)?,
             bind_material: BindMaterial::parse_opt(it)?,
@@ -3512,7 +3512,7 @@ pub struct EffectData {
 impl Instantiate for Effect {
     const INSTANCE: &'static str = "instance_effect";
     type Data = EffectData;
-    fn parse_data<'a>(_: &Element, it: &mut ElementIter<'a>) -> Result<Self::Data> {
+    fn parse_data(_: &Element, it: &mut ElementIter<'_>) -> Result<Self::Data> {
         Ok(EffectData {
             technique_hint: TechniqueHint::parse_list(it)?,
             set_param: EffectSetParam::parse_list(it)?,
