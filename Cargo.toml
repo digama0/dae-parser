@@ -12,4 +12,4 @@ categories = ["parser implementations", "graphics", "game development"]
 
 [dependencies]
 minidom = "0.13"
-url = "2.2"
+percent-encoding = "2.1"

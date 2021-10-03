@@ -1,9 +1,12 @@
+mod url;
+
+pub use crate::url::Url;
 use minidom::{quick_xml, Element};
 use std::{io::BufRead, ops::Deref, str::FromStr};
-use url::Url;
 
 type XReader<R> = quick_xml::Reader<R>;
 
+#[derive(Debug)]
 pub enum Error {
     Parse(minidom::Error),
     Other(&'static str),
@@ -480,25 +483,40 @@ impl XNode for Orthographic {
     fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
-        Ok(Orthographic {
+        let res = Orthographic {
             xmag: parse_opt("xmag", &mut it, parse_elem)?,
             ymag: parse_opt("ymag", &mut it, parse_elem)?,
             extra: Extra::parse_list(&mut it)?,
             aspect_ratio: parse_opt("aspect_ratio", &mut it, parse_elem)?,
             znear: parse_one("znear", &mut it, parse_elem)?,
             zfar: parse_one("zfar", &mut it, parse_elem)?,
-        })
+        };
+        finish(res, it)
     }
 }
 
 #[derive(Debug)]
-pub struct Perspective(pub Box<[f32; 3]>);
+pub struct Perspective {
+    pub xfov: Option<f32>,
+    pub yfov: Option<f32>,
+    pub aspect_ratio: Option<f32>,
+    pub znear: f32,
+    pub zfar: f32,
+}
 
 impl XNode for Perspective {
     const NAME: &'static str = "perspective";
     fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
-        Ok(Perspective(parse_array_n(element)?))
+        let mut it = element.children().peekable();
+        let res = Perspective {
+            xfov: parse_opt("xfov", &mut it, parse_elem)?,
+            yfov: parse_opt("yfov", &mut it, parse_elem)?,
+            aspect_ratio: parse_opt("aspect_ratio", &mut it, parse_elem)?,
+            znear: parse_one("znear", &mut it, parse_elem)?,
+            zfar: parse_one("zfar", &mut it, parse_elem)?,
+        };
+        finish(res, it)
     }
 }
 
@@ -2902,7 +2920,7 @@ pub struct InstanceRigidConstraint {
 }
 
 impl XNode for InstanceRigidConstraint {
-    const NAME: &'static str = "rigid_constraint";
+    const NAME: &'static str = "instance_rigid_constraint";
     fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         Ok(InstanceRigidConstraint {
@@ -3037,7 +3055,7 @@ impl XNode for Matrix {
 pub struct Rotate(pub Box<[f32; 4]>);
 
 impl XNode for Rotate {
-    const NAME: &'static str = "Rotate";
+    const NAME: &'static str = "rotate";
     fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         Ok(Rotate(parse_array_n(element)?))
@@ -3176,7 +3194,7 @@ impl<T: ParseLibrary> XNode for Library<T> {
         let mut it = element.children().peekable();
         Ok(Library {
             asset: Asset::parse_opt_box(&mut it)?,
-            items: T::parse_list_n::<1>(&mut it)?,
+            items: T::parse_list(&mut it)?, // should be 1 or more but blender disagrees
             extra: Extra::parse_many(it)?,
         })
     }
