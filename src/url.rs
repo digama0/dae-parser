@@ -5,6 +5,7 @@ use percent_encoding::{percent_decode_str, percent_encode, AsciiSet, CONTROLS};
 /// https://url.spec.whatwg.org/#fragment-percent-encode-set
 const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ').add(b'"').add(b'<').add(b'>').add(b'`');
 
+#[derive(Clone)]
 pub enum Url {
     Fragment(String),
     Other(String),

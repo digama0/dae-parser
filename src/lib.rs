@@ -71,6 +71,7 @@
 mod url;
 
 use std::convert::{TryFrom, TryInto};
+use std::fmt::Debug;
 use std::io::BufRead;
 use std::ops::Deref;
 use std::path::Path;
@@ -275,7 +276,7 @@ pub trait XNode: Sized {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct Extra {
     pub id: Option<String>,
     pub name: Option<String>,
@@ -313,7 +314,7 @@ impl Extra {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct Contributor {
     pub author: Option<String>,
     pub authoring_tool: Option<String>,
@@ -338,7 +339,7 @@ impl XNode for Contributor {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Unit {
     pub name: Option<String>,
     pub meter: f32,
@@ -367,7 +368,7 @@ impl XNode for Unit {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum UpAxis {
     XUp,
     YUp,
@@ -393,7 +394,7 @@ impl XNode for UpAxis {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Asset {
     pub contributor: Vec<Contributor>,
     pub created: String,
@@ -437,7 +438,7 @@ pub trait ParseLibrary: XNode {
     const LIBRARY: &'static str;
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Sampler {
     pub id: Option<String>,
     pub inputs: Vec<Input>,
@@ -462,7 +463,7 @@ impl XNode for Sampler {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Channel {
     pub source: Url,
     pub target: String,
@@ -480,7 +481,7 @@ impl XNode for Channel {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Animation {
     pub id: Option<String>,
     pub name: Option<String>,
@@ -517,7 +518,7 @@ impl XNode for Animation {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct AnimationClip {
     pub id: Option<String>,
     pub name: Option<String>,
@@ -545,7 +546,7 @@ impl XNode for AnimationClip {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Orthographic {
     pub xmag: Option<f32>,
     pub ymag: Option<f32>,
@@ -572,7 +573,7 @@ impl XNode for Orthographic {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Perspective {
     pub xfov: Option<f32>,
     pub yfov: Option<f32>,
@@ -597,7 +598,7 @@ impl XNode for Perspective {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum OpticsCommon {
     Orthographic(Orthographic),
     Perspective(Perspective),
@@ -613,7 +614,7 @@ impl OpticsCommon {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Optics {
     pub common: OpticsCommon,
     pub technique: Vec<Technique>,
@@ -636,7 +637,7 @@ impl XNode for Optics {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Imager {
     pub technique: Vec<Technique>,
     pub extra: Vec<Extra>,
@@ -654,7 +655,7 @@ impl XNode for Imager {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Camera {
     pub id: Option<String>,
     pub name: Option<String>,
@@ -680,7 +681,7 @@ impl XNode for Camera {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Joints {
     pub inputs: Vec<Input>,
     pub extra: Vec<Extra>,
@@ -698,7 +699,7 @@ impl XNode for Joints {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct VertexWeights {
     pub count: usize,
     pub inputs: InputList,
@@ -735,7 +736,7 @@ impl XNode for VertexWeights {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Skin {
     pub source: Url,
     pub bind_shape_matrix: Option<Box<[f32; 16]>>,
@@ -761,7 +762,7 @@ impl XNode for Skin {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum MorphMethod {
     Normalized,
     Relative,
@@ -785,7 +786,7 @@ impl FromStr for MorphMethod {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Targets {
     pub inputs: Vec<Input>,
     pub morph_target: usize,
@@ -814,7 +815,7 @@ impl XNode for Targets {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Morph {
     pub source: Url,
     pub method: MorphMethod,
@@ -838,7 +839,7 @@ impl XNode for Morph {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum ControlElement {
     Skin(Skin),
     Morph(Morph),
@@ -854,7 +855,7 @@ impl ControlElement {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Controller {
     pub id: Option<String>,
     pub name: Option<String>,
@@ -878,7 +879,7 @@ impl XNode for Controller {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum AnnotType {
     Bool(bool),
     Bool2([bool; 2]),
@@ -922,7 +923,7 @@ impl AnnotType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Annotate {
     pub name: String,
     pub value: AnnotType,
@@ -941,7 +942,7 @@ impl XNode for Annotate {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum SurfaceFace {
     PosX,
     NegX,
@@ -973,7 +974,7 @@ impl FromStr for SurfaceFace {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum SurfaceInit {
     Null,
     Target,
@@ -1003,7 +1004,7 @@ impl SurfaceInit {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Surface {
     pub init: SurfaceInit,
     pub format: Option<String>,
@@ -1033,7 +1034,7 @@ impl XNode for Surface {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum WrapMode {
     Wrap,
     Mirror,
@@ -1063,7 +1064,7 @@ impl FromStr for WrapMode {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum SamplerFilterMode {
     None,
     Nearest,
@@ -1097,7 +1098,7 @@ impl FromStr for SamplerFilterMode {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Sampler2D {
     pub source: String,
     pub wrap_s: WrapMode,
@@ -1131,7 +1132,7 @@ impl XNode for Sampler2D {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum ParamType {
     Float(f32),
     Float2([f32; 2]),
@@ -1156,7 +1157,7 @@ impl ParamType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct NewParam {
     pub sid: String,
     pub annotate: Vec<Annotate>,
@@ -1181,13 +1182,13 @@ impl XNode for NewParam {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum ImageParam {
     NewParam(NewParam),
     Image(Image),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct TechniqueFx<T> {
     pub id: Option<String>,
     pub sid: String,
@@ -1227,7 +1228,7 @@ impl ImageParam {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Texture {
     pub texture: String,
     pub texcoord: String,
@@ -1247,7 +1248,7 @@ impl XNode for Texture {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum ColorParam {
     Color(Box<[f32; 4]>),
     Param(Box<str>),
@@ -1268,7 +1269,7 @@ impl ColorParam {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum FloatParam {
     Float(f32),
     Param(Box<str>),
@@ -1287,7 +1288,7 @@ impl FloatParam {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct Blinn {
     pub emission: Option<ColorParam>,
     pub ambient: Option<ColorParam>,
@@ -1321,7 +1322,7 @@ impl XNode for Blinn {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct ConstantFx {
     pub emission: Option<ColorParam>,
     pub reflective: Option<ColorParam>,
@@ -1347,7 +1348,7 @@ impl XNode for ConstantFx {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct Lambert {
     pub emission: Option<ColorParam>,
     pub ambient: Option<ColorParam>,
@@ -1377,7 +1378,7 @@ impl XNode for Lambert {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct Phong {
     pub emission: Option<ColorParam>,
     pub ambient: Option<ColorParam>,
@@ -1411,7 +1412,7 @@ impl XNode for Phong {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Shader {
     Blinn(Blinn),
     Constant(ConstantFx),
@@ -1431,7 +1432,7 @@ impl Shader {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct CommonData {
     pub image_param: Vec<ImageParam>,
     pub shaders: Vec<Shader>,
@@ -1446,7 +1447,7 @@ impl ProfileData for CommonData {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct ProfileCommon {
     pub asset: Option<Box<Asset>>,
     pub image: Vec<Image>,
@@ -1480,7 +1481,7 @@ impl XNode for ProfileCommon {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ProfileCG(pub Element); // TODO
 
 impl XNode for ProfileCG {
@@ -1490,7 +1491,7 @@ impl XNode for ProfileCG {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ProfileGLES(pub Element); // TODO
 
 impl ProfileGLES {
@@ -1500,7 +1501,7 @@ impl ProfileGLES {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ProfileGLSL(pub Element); // TODO
 
 impl ProfileGLSL {
@@ -1510,7 +1511,7 @@ impl ProfileGLSL {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Profile {
     Common(ProfileCommon),
     CG(ProfileCG),
@@ -1530,7 +1531,7 @@ impl Profile {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Effect {
     pub id: String,
     pub name: Option<String>,
@@ -1564,7 +1565,7 @@ impl XNode for Effect {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct ForceField {
     pub id: Option<String>,
     pub name: Option<String>,
@@ -1588,7 +1589,7 @@ impl XNode for ForceField {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum ArrayElement {
     IdRef(Box<[String]>),
     Name(Box<[String]>),
@@ -1626,7 +1627,7 @@ impl ArrayElement {
 }
 
 /// `<source>` (core)
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Source {
     pub id: Option<String>,
     pub name: Option<String>,
@@ -1656,7 +1657,7 @@ impl XNode for Source {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Accessor {
     pub count: usize,
     pub offset: usize,
@@ -1755,7 +1756,7 @@ mk_semantic! {
 }
 
 /// `<input>` (unshared)
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Input {
     pub semantic: Semantic,
     pub source: Url,
@@ -1773,7 +1774,7 @@ impl XNode for Input {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct InputS {
     pub input: Input,
     pub offset: u32,
@@ -1798,7 +1799,7 @@ impl XNode for InputS {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct InputList {
     pub inputs: Vec<InputS>,
     pub depth: usize,
@@ -1824,7 +1825,7 @@ impl InputList {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Vertices {
     pub id: String,
     pub name: Option<String>,
@@ -1846,7 +1847,7 @@ impl XNode for Vertices {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct Geom<T> {
     pub name: Option<String>,
     pub material: Option<String>,
@@ -1883,7 +1884,7 @@ impl<T: ParseGeom> Geom<T> {
     pub const NAME: &'static str = T::NAME;
 }
 
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct LineGeom(pub Option<Box<[u32]>>);
 pub type Lines = Geom<LineGeom>;
 
@@ -1904,7 +1905,7 @@ impl ParseGeom for LineGeom {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct LineStripGeom(pub Vec<Box<[u32]>>);
 pub type LineStrips = Geom<LineStripGeom>;
 
@@ -1926,13 +1927,13 @@ impl ParseGeom for LineStripGeom {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct PolygonHole {
     pub verts: Box<[u32]>,
     pub hole: Vec<Box<[u32]>>,
 }
 
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct PolygonGeom(pub Vec<PolygonHole>);
 pub type Polygons = Geom<PolygonGeom>;
 
@@ -1975,7 +1976,7 @@ impl ParseGeom for PolygonGeom {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct PolyListGeom {
     pub vcount: Option<Box<[u32]>>,
     pub prim: Option<Box<[u32]>>,
@@ -2023,7 +2024,7 @@ impl ParseGeom for PolyListGeom {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct TriangleGeom(pub Option<Box<[u32]>>);
 pub type Triangles = Geom<TriangleGeom>;
 
@@ -2044,7 +2045,7 @@ impl ParseGeom for TriangleGeom {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct TriFanGeom(pub Vec<Box<[u32]>>);
 pub type TriFans = Geom<TriFanGeom>;
 
@@ -2066,7 +2067,7 @@ impl ParseGeom for TriFanGeom {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct TriStripGeom(pub Vec<Box<[u32]>>);
 pub type TriStrips = Geom<TriStripGeom>;
 
@@ -2088,7 +2089,7 @@ impl ParseGeom for TriStripGeom {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Primitive {
     Lines(Lines),
     LineStrips(LineStrips),
@@ -2114,7 +2115,7 @@ impl Primitive {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ConvexMesh {
     pub source: Vec<Source>,
     pub vertices: Option<Vertices>,
@@ -2133,7 +2134,7 @@ impl ConvexMesh {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Mesh {
     pub convex: bool,
     pub source: Vec<Source>,
@@ -2166,7 +2167,7 @@ impl XNode for Mesh {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ControlVertices {
     pub input: Vec<Input>,
     pub extra: Vec<Extra>,
@@ -2184,7 +2185,7 @@ impl XNode for ControlVertices {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Spline {
     pub closed: bool,
     pub source: Vec<Source>,
@@ -2206,7 +2207,7 @@ impl XNode for Spline {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum GeometryElement {
     ConvexHullOf(Url),
     Mesh(Mesh),
@@ -2224,7 +2225,7 @@ impl GeometryElement {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Geometry {
     pub id: Option<String>,
     pub name: Option<String>,
@@ -2248,7 +2249,7 @@ impl XNode for Geometry {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum ImageSource {
     Data(Box<[u8]>),
     InitFrom(String),
@@ -2288,7 +2289,7 @@ impl ImageSource {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Image {
     pub id: Option<String>,
     pub name: Option<String>,
@@ -2320,7 +2321,7 @@ impl XNode for Image {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct AmbientLight {
     pub color: Box<[f32; 3]>,
 }
@@ -2335,7 +2336,7 @@ impl XNode for AmbientLight {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct DirectionalLight {
     pub color: Box<[f32; 3]>,
 }
@@ -2350,7 +2351,7 @@ impl XNode for DirectionalLight {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct PointLight {
     pub color: Box<[f32; 3]>,
     pub constant_attenuation: f32,
@@ -2375,7 +2376,7 @@ impl XNode for PointLight {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SpotLight {
     pub color: Box<[f32; 3]>,
     pub constant_attenuation: f32,
@@ -2404,7 +2405,7 @@ impl XNode for SpotLight {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum LightKind {
     Ambient(AmbientLight),
     Directional(DirectionalLight),
@@ -2424,7 +2425,7 @@ impl LightKind {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Light {
     pub id: Option<String>,
     pub name: Option<String>,
@@ -2453,7 +2454,7 @@ impl XNode for Light {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Material {
     pub id: Option<String>,
     pub name: Option<String>,
@@ -2477,7 +2478,7 @@ impl XNode for Material {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct PhysicsMaterialCommon {
     pub dynamic_friction: f32,
     pub restitution: f32,
@@ -2495,7 +2496,7 @@ impl PhysicsMaterialCommon {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct PhysicsMaterial {
     pub id: Option<String>,
     pub name: Option<String>,
@@ -2521,7 +2522,7 @@ impl XNode for PhysicsMaterial {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct RigidBodyCommon {
     pub dynamic: Option<bool>,
     pub mass: Option<f32>,
@@ -2549,7 +2550,7 @@ impl RigidBodyCommon {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct RigidBody {
     pub sid: Option<String>,
     pub name: Option<String>,
@@ -2583,7 +2584,7 @@ impl XNode for RigidBody {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct InstanceRigidBodyCommon {
     pub angular_velocity: [f32; 3],
     pub velocity: [f32; 3],
@@ -2610,7 +2611,7 @@ impl InstanceRigidBodyCommon {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct InstanceRigidBody {
     pub body: String,
     pub target: Url,
@@ -2642,7 +2643,7 @@ impl XNode for InstanceRigidBody {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum RigidTransform {
     Translate(Translate),
     Rotate(Rotate),
@@ -2658,7 +2659,7 @@ impl RigidTransform {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Plane {
     pub equation: [f32; 4],
     pub extra: Vec<Extra>,
@@ -2676,7 +2677,7 @@ impl XNode for Plane {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct BoxShape {
     pub half_extents: [f32; 3],
     pub extra: Vec<Extra>,
@@ -2694,7 +2695,7 @@ impl XNode for BoxShape {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Sphere {
     pub radius: f32,
     pub extra: Vec<Extra>,
@@ -2712,7 +2713,7 @@ impl XNode for Sphere {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Cylinder {
     pub height: f32,
     pub radius: f32,
@@ -2732,7 +2733,7 @@ impl XNode for Cylinder {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct TaperedCylinder {
     pub height: f32,
     pub radius1: f32,
@@ -2754,7 +2755,7 @@ impl XNode for TaperedCylinder {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Capsule {
     pub height: f32,
     pub radius: f32,
@@ -2774,7 +2775,7 @@ impl XNode for Capsule {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct TaperedCapsule {
     pub height: f32,
     pub radius1: f32,
@@ -2796,7 +2797,7 @@ impl XNode for TaperedCapsule {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum ShapeGeom {
     Plane(Plane),
     Box(BoxShape),
@@ -2824,7 +2825,7 @@ impl ShapeGeom {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Shape {
     pub hollow: Option<bool>,
     pub mass: Option<f32>,
@@ -2852,7 +2853,7 @@ impl XNode for Shape {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Attachment {
     pub rigid_body: Url,
     pub transform: Vec<RigidTransform>,
@@ -2875,7 +2876,7 @@ impl XNode for Attachment {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct Limits {
     pub min: Option<Box<[f32; 3]>>,
     pub max: Option<Box<[f32; 3]>>,
@@ -2891,7 +2892,7 @@ impl Limits {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Spring {
     pub stiffness: f32,
     pub damping: f32,
@@ -2920,7 +2921,7 @@ impl Spring {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct RigidConstraintCommon {
     pub enabled: bool,
     pub interpenetrate: bool,
@@ -2962,7 +2963,7 @@ impl RigidConstraintCommon {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct RigidConstraint {
     pub sid: Option<String>,
     pub name: Option<String>,
@@ -2990,7 +2991,7 @@ impl XNode for RigidConstraint {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct InstanceRigidConstraint {
     pub constraint: String,
     pub extra: Vec<Extra>,
@@ -3010,7 +3011,7 @@ impl XNode for InstanceRigidConstraint {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct PhysicsModelData {
     pub parent: Option<Url>,
     pub instance_force_field: Vec<Instance<ForceField>>,
@@ -3031,7 +3032,7 @@ impl Instantiate for PhysicsModel {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct PhysicsModel {
     pub id: Option<String>,
     pub name: Option<String>,
@@ -3059,7 +3060,7 @@ impl XNode for PhysicsModel {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct PhysicsSceneCommon {
     pub gravity: Option<f32>,
     pub time_step: Option<f32>,
@@ -3076,7 +3077,7 @@ impl PhysicsSceneCommon {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct PhysicsScene {
     pub id: Option<String>,
     pub name: Option<String>,
@@ -3106,7 +3107,7 @@ impl XNode for PhysicsScene {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct LookAt(pub Box<[f32; 9]>);
 
 impl XNode for LookAt {
@@ -3117,7 +3118,7 @@ impl XNode for LookAt {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Matrix(pub Box<[f32; 16]>);
 
 impl XNode for Matrix {
@@ -3128,7 +3129,7 @@ impl XNode for Matrix {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Rotate(pub Box<[f32; 4]>);
 
 impl XNode for Rotate {
@@ -3139,7 +3140,7 @@ impl XNode for Rotate {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Scale(pub Box<[f32; 3]>);
 
 impl XNode for Scale {
@@ -3150,7 +3151,7 @@ impl XNode for Scale {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Skew(pub Box<[f32; 7]>);
 
 impl XNode for Skew {
@@ -3161,7 +3162,7 @@ impl XNode for Skew {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Translate(pub Box<[f32; 3]>);
 
 impl XNode for Translate {
@@ -3172,7 +3173,7 @@ impl XNode for Translate {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Transform {
     LookAt(LookAt),
     Matrix(Matrix),
@@ -3196,7 +3197,7 @@ impl Transform {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Node {
     pub id: Option<String>,
     pub name: Option<String>,
@@ -3232,7 +3233,7 @@ impl XNode for Node {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct VisualScene {
     pub id: Option<String>,
     pub name: Option<String>,
@@ -3257,7 +3258,7 @@ impl XNode for VisualScene {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Library<T> {
     pub asset: Option<Box<Asset>>,
     pub items: Vec<T>,
@@ -3283,7 +3284,7 @@ macro_rules! mk_libraries {
             const LIBRARY: &'static str = $s;
         })*
 
-        #[derive(Debug)]
+        #[derive(Clone, Debug)]
         pub enum LibraryElement {
             $($name(Library<$arg>),)*
         }
@@ -3317,7 +3318,7 @@ mk_libraries! {
     VisualScenes(VisualScene) = "library_visual_scenes",
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Instance<T: Instantiate> {
     pub url: Url,
     pub data: T::Data,
@@ -3326,7 +3327,7 @@ pub struct Instance<T: Instantiate> {
 
 pub trait Instantiate {
     const INSTANCE: &'static str;
-    type Data: std::fmt::Debug;
+    type Data;
     fn parse_data(e: &Element, it: &mut ElementIter<'_>) -> Result<Self::Data>;
 }
 
@@ -3343,10 +3344,33 @@ impl<T: Instantiate> XNode for Instance<T> {
     }
 }
 
-#[derive(Debug)]
 pub enum DefInstance<T: Instantiate> {
     Def(T),
     Ref(Instance<T>),
+}
+
+impl<T: Instantiate + Debug> Debug for DefInstance<T>
+where
+    T::Data: Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Def(t) => f.debug_tuple("Def").field(t).finish(),
+            Self::Ref(t) => f.debug_tuple("Ref").field(t).finish(),
+        }
+    }
+}
+
+impl<T: Instantiate + Clone> Clone for DefInstance<T>
+where
+    T::Data: Clone,
+{
+    fn clone(&self) -> Self {
+        match self {
+            Self::Def(t) => Self::Def(t.clone()),
+            Self::Ref(t) => Self::Ref(t.clone()),
+        }
+    }
 }
 
 impl<T: Instantiate + XNode> DefInstance<T> {
@@ -3383,7 +3407,7 @@ basic_instance! {
     VisualScene => "instance_visual_scene";
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Param {
     pub sid: Option<String>,
     pub name: Option<String>,
@@ -3405,7 +3429,7 @@ impl XNode for Param {
 }
 
 /// `<technique>` (core)
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Technique {
     pub element: Element,
 }
@@ -3424,7 +3448,7 @@ impl Technique {
     pub const COMMON: &'static str = "technique_common";
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct TechniqueHint {
     pub platform: Option<String>,
     pub ref_: String,
@@ -3443,7 +3467,7 @@ impl XNode for TechniqueHint {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct BindM {
     pub semantic: Option<String>,
     pub target: String,
@@ -3461,7 +3485,7 @@ impl XNode for BindM {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct BindVertexInput {
     pub semantic: String,
     pub input_semantic: String,
@@ -3482,7 +3506,7 @@ impl XNode for BindVertexInput {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct InstanceMaterial {
     pub sid: Option<String>,
     pub name: Option<String>,
@@ -3511,7 +3535,7 @@ impl XNode for InstanceMaterial {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct BindMaterial {
     pub param: Vec<Param>,
     pub instance_material: Vec<InstanceMaterial>,
@@ -3544,7 +3568,7 @@ impl Instantiate for Geometry {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ControllerData {
     pub skeleton: Vec<Url>,
     pub bind_material: Option<BindMaterial>,
@@ -3561,7 +3585,7 @@ impl Instantiate for Controller {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct EffectSetParam {
     pub ref_: String,
     pub value: AnnotType, // slightly inaccurate
@@ -3580,7 +3604,7 @@ impl XNode for EffectSetParam {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct EffectData {
     pub technique_hint: Vec<TechniqueHint>,
     pub set_param: Vec<EffectSetParam>,
@@ -3597,7 +3621,7 @@ impl Instantiate for Effect {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct Scene {
     pub instance_physics_scene: Vec<Instance<PhysicsScene>>,
     pub instance_visual_scene: Option<Instance<VisualScene>>,
@@ -3617,7 +3641,7 @@ impl XNode for Scene {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Document {
     pub asset: Asset,
     pub library: Vec<LibraryElement>,
