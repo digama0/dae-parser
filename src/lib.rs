@@ -57,7 +57,7 @@
 //!         assert_eq!(mesh.source[0].id.as_ref().unwrap(), "Cube-mesh-positions");
 //!         if let Primitive::Triangles(tris) = &mesh.elements[0] {
 //!             assert_eq!(
-//!                 tris.data.0.as_deref().unwrap(),
+//!                 tris.data.as_deref().unwrap(),
 //!                 &[3, 1, 0, 1, 5, 2, 3, 4, 1, 1, 4, 5]
 //!             );
 //!             return;
