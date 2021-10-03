@@ -38,7 +38,9 @@ pub struct VisualScene {
     pub asset: Option<Box<Asset>>,
     /// The scene graph subtrees.
     pub nodes: Vec<Node>,
-    // evaluate_scene: Vec<EvaluateScene>
+    /// The [`EvaluateScene`] element declares information
+    /// specifying how to evaluate this [`VisualScene`].
+    pub evaluate_scene: Vec<EvaluateScene>,
     /// Provides arbitrary additional information about this element.
     pub extra: Vec<Extra>,
 }
@@ -53,6 +55,7 @@ impl XNode for VisualScene {
             name: element.attr("name").map(Into::into),
             asset: Asset::parse_opt_box(&mut it)?,
             nodes: Node::parse_list_n::<1>(&mut it)?,
+            evaluate_scene: EvaluateScene::parse_list(&mut it)?,
             extra: Extra::parse_many(it)?,
         })
     }
@@ -107,5 +110,27 @@ impl XNode for Node {
             children: Node::parse_list(&mut it)?,
             extra: Extra::parse_many(it)?,
         })
+    }
+}
+
+/// Declares information specifying how to evaluate a [`VisualScene`].
+#[derive(Clone, Debug)]
+pub struct EvaluateScene {
+    /// The text string name of this element.
+    pub name: Option<String>,
+    /// Describes the effect passes to evaluate a scene.
+    pub render: Vec<Render>,
+}
+
+impl XNode for EvaluateScene {
+    const NAME: &'static str = "evaluate_scene";
+    fn parse(element: &Element) -> Result<Self> {
+        debug_assert_eq!(element.name(), Self::NAME);
+        let mut it = element.children().peekable();
+        let res = EvaluateScene {
+            name: element.attr("name").map(Into::into),
+            render: Render::parse_list_n::<1>(&mut it)?,
+        };
+        finish(res, it)
     }
 }

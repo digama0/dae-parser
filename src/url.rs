@@ -5,9 +5,11 @@ use percent_encoding::{percent_decode_str, percent_encode, AsciiSet, CONTROLS};
 /// https://url.spec.whatwg.org/#fragment-percent-encode-set
 const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ').add(b'"').add(b'<').add(b'>').add(b'`');
 
-/// A (really) basic URL parser. It is optimized for the case of COLLADA documents
-/// where most "URLs" are really just names of other entities in the document,
-/// prefixed by `#`. Unfortunately the `url` crate does not like these fragments,
+/// A (really) basic URL parser.
+///
+/// It is optimized for the case of COLLADA documents where most "URLs"
+/// are really just names of other entities in the document, prefixed by `#`.
+/// Unfortunately the `url` crate does not like these fragments,
 /// and we don't have a base URL to work from since the parser does not do URL resolution.
 /// So we parse fragments and leave everything else to be parsed by a proper URL crate
 /// during resolution.

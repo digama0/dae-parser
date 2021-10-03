@@ -1,5 +1,34 @@
 use crate::*;
 
+/// Describes one effect pass to evaluate a scene.
+#[derive(Clone, Debug)]
+pub struct Render {
+    /// Refers to a node that contains a camera describing the viewpoint
+    /// from which to render this compositing step.
+    pub camera_node: Url,
+    /// Specifies which layer or layers to render in this compositing step
+    /// while evaluating the scene.
+    pub layers: Vec<String>,
+    /// Instantiates a COLLADA material resource. See [`InstanceEffectData`]
+    /// for the additional instance effect data.
+    pub instance_effect: Option<Instance<Effect>>,
+}
+
+impl XNode for Render {
+    const NAME: &'static str = "render";
+    fn parse(element: &Element) -> Result<Self> {
+        debug_assert_eq!(element.name(), Self::NAME);
+        let mut it = element.children().peekable();
+        let res = Render {
+            camera_node: parse_attr(element.attr("camera_node"))?
+                .ok_or("missing camera_node attr")?,
+            layers: parse_list("layer", &mut it, parse_text)?,
+            instance_effect: Instance::parse_opt(&mut it)?,
+        };
+        finish(res, it)
+    }
+}
+
 /// A shader element.
 #[derive(Clone, Debug)]
 pub enum Shader {
