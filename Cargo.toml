@@ -2,7 +2,7 @@
 name = "dae-parser"
 version = "0.1.0"
 authors = ["Mario Carneiro <di.gama@gmail.com>"]
-edition = "2021"
+edition = "2018"
 description = "Parser for the Collada (DAE) format"
 repository = "https://github.com/digama0/dae-parser"
 readme = "README.md"
