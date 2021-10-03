@@ -1,18 +1,97 @@
+//! A parser for the COLLADA format (`.dae` extension).
+//!
+//! The main entry point is the [`Document`] type, which has a [`FromStr`] implementation to convert
+//! literal strings / slices, or [`Document::from_file`] to read from a `.dae` file on disk.
+//!
+//! Collada documents are parsed eagerly, validating everything according to the
+//! [COLLADA schema](https://www.khronos.org/files/collada_spec_1_4.pdf).
+//! Once parsed, the data structures (structs and enums) can be navigated directly,
+//! as all the data structures are public, and reflect the XML schema closely.
+//!
+//! This library implements only version 1.4.1 of the Collada spec, although it may be expanded
+//! in the future (PRs welcome).
+//!
+//! ```
+//! use std::str::FromStr;
+//! use dae_parser::*;
+//!
+//! let dae_file = r##"\
+//! <?xml version="1.0" encoding="utf-8"?>
+//! <COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1">
+//!   <asset>
+//!     <created>1970-01-01T00:00:00</created>
+//!     <modified>1970-01-01T00:00:00</modified>
+//!   </asset>
+//!   <library_geometries>
+//!     <geometry id="Cube-mesh" name="Cube">
+//!       <mesh>
+//!         <source id="Cube-mesh-positions">
+//!           <float_array id="Cube-mesh-positions-array" count="18">
+//!             1 1 1 1 -1 1 1 -1 -1 -1 1 1 -1 -1 1 -1 -1 -1
+//!           </float_array>
+//!           <technique_common>
+//!             <accessor source="#Cube-mesh-positions-array" count="6" stride="3">
+//!               <param name="X" type="float"/>
+//!               <param name="Y" type="float"/>
+//!               <param name="Z" type="float"/>
+//!             </accessor>
+//!           </technique_common>
+//!         </source>
+//!         <vertices id="Cube-mesh-vertices">
+//!           <input semantic="POSITION" source="#Cube-mesh-positions"/>
+//!         </vertices>
+//!         <triangles material="Material-material" count="4">
+//!           <input semantic="VERTEX" source="#Cube-mesh-vertices" offset="0"/>
+//!           <p>3 1 0 1 5 2 3 4 1 1 4 5</p>
+//!         </triangles>
+//!       </mesh>
+//!     </geometry>
+//!   </library_geometries>
+//! </COLLADA>"##;
+//! let document = Document::from_str(dae_file).unwrap();
+//! if let LibraryElement::Geometries(lib) = &document.library[0] {
+//!     let geom = &lib.items[0];
+//!     assert_eq!(geom.id.as_ref().unwrap(), "Cube-mesh");
+//!     if let GeometryElement::Mesh(mesh) = &geom.element {
+//!         assert_eq!(mesh.source[0].id.as_ref().unwrap(), "Cube-mesh-positions");
+//!         if let Primitive::Triangles(tris) = &mesh.elements[0] {
+//!             assert_eq!(
+//!                 tris.data.0.as_deref().unwrap(),
+//!                 &[3, 1, 0, 1, 5, 2, 3, 4, 1, 1, 4, 5]
+//!             );
+//!             return;
+//!         }
+//!     }
+//! }
+//! panic!()
+//! ```
+
 #![forbid(unsafe_code)]
 
 mod url;
 
-pub use crate::url::Url;
-use minidom::{quick_xml, Element};
-use std::{io::BufRead, ops::Deref, str::FromStr};
+use std::convert::{TryFrom, TryInto};
+use std::io::BufRead;
+use std::ops::Deref;
+use std::path::Path;
+use std::str::FromStr;
 
-type XReader<R> = quick_xml::Reader<R>;
+pub use crate::url::Url;
+pub use minidom::Element;
+
+type XReader<R> = minidom::quick_xml::Reader<R>;
 
 #[derive(Debug)]
 pub enum Error {
     Parse(minidom::Error),
     Other(&'static str),
     Str(String),
+}
+
+impl From<std::io::Error> for Error {
+    fn from(v: std::io::Error) -> Self {
+        Self::Parse(v.into())
+    }
 }
 
 impl From<minidom::Error> for Error {
@@ -196,7 +275,7 @@ pub trait XNode: Sized {
     }
 }
 
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub struct Extra {
     pub id: Option<String>,
     pub name: Option<String>,
@@ -234,7 +313,7 @@ impl Extra {
     }
 }
 
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub struct Contributor {
     pub author: Option<String>,
     pub authoring_tool: Option<String>,
@@ -671,18 +750,14 @@ impl XNode for Skin {
     fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
-        let res = Skin {
+        Ok(Skin {
             source: parse_attr(element.attr("source"))?.ok_or("missing source attr")?,
             bind_shape_matrix: parse_opt("bind_shape_matrix", &mut it, parse_array_n)?,
-            sources: Source::parse_list(&mut it)?,
+            sources: Source::parse_list_n::<3>(&mut it)?,
             joints: Joints::parse_one(&mut it)?,
             weights: VertexWeights::parse_one(&mut it)?,
             extra: Extra::parse_many(it)?,
-        };
-        if res.sources.len() < 3 {
-            return Err("expected at least 3 skin sources".into());
-        }
-        Ok(res)
+        })
     }
 }
 
@@ -1178,6 +1253,7 @@ pub enum ColorParam {
     Param(Box<str>),
     Texture(Box<Texture>),
 }
+
 impl ColorParam {
     pub fn parse(element: &Element) -> Result<Self> {
         let mut it = element.children().peekable();
@@ -1197,6 +1273,7 @@ pub enum FloatParam {
     Float(f32),
     Param(Box<str>),
 }
+
 impl FloatParam {
     pub fn parse(element: &Element) -> Result<Self> {
         let mut it = element.children().peekable();
@@ -1354,7 +1431,7 @@ impl Shader {
     }
 }
 
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub struct CommonData {
     pub image_param: Vec<ImageParam>,
     pub shaders: Vec<Shader>,
@@ -1369,7 +1446,7 @@ impl ProfileData for CommonData {
     }
 }
 
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub struct ProfileCommon {
     pub asset: Option<Box<Asset>>,
     pub image: Vec<Image>,
@@ -1736,7 +1813,7 @@ impl std::ops::Deref for InputList {
 }
 
 impl InputList {
-    pub fn parse<const N: usize>(it: &mut ElementIter<'_>) -> Result<Self> {
+    fn parse<const N: usize>(it: &mut ElementIter<'_>) -> Result<Self> {
         let inputs = InputS::parse_list_n::<N>(it)?;
         let depth = inputs.iter().map(|i| i.offset).max().map_or(0, |n| n + 1) as usize;
         Ok(InputList { inputs, depth })
@@ -3548,7 +3625,32 @@ pub struct Document {
     pub extra: Vec<Extra>,
 }
 
+impl FromStr for Document {
+    type Err = Error;
+    fn from_str(s: &str) -> Result<Self> {
+        Self::try_from(s.as_bytes())
+    }
+}
+
+impl TryFrom<&str> for Document {
+    type Error = Error;
+    fn try_from(s: &str) -> Result<Self> {
+        Self::from_str(s)
+    }
+}
+
+impl TryFrom<&[u8]> for Document {
+    type Error = Error;
+    fn try_from(s: &[u8]) -> Result<Self> {
+        Self::from_reader(std::io::Cursor::new(s))
+    }
+}
+
 impl Document {
+    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
+        Self::from_reader(std::io::BufReader::new(std::fs::File::open(path)?))
+    }
+
     pub fn from_reader<R: BufRead>(reader: R) -> Result<Self> {
         Self::from_xml_reader(&mut XReader::from_reader(reader))
     }
