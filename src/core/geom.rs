@@ -86,6 +86,14 @@ impl GeometryElement {
             GeometryElement::Spline(spline) => &spline.sources,
         }
     }
+
+    /// Returns this element if it is a `<mesh>`.
+    pub fn as_mesh(&self) -> Option<&Mesh> {
+        match self {
+            GeometryElement::Mesh(mesh) if !mesh.convex => Some(mesh),
+            _ => None,
+        }
+    }
 }
 
 /// Describes basic geometric meshes using vertex and primitive information.
@@ -250,39 +258,53 @@ impl<T: ParseGeom> XNode for Geom<T> {
     }
 }
 
-/// A collection of primitive elements.
-#[derive(Clone, Debug)]
-pub enum Primitive {
-    /// Line primitives.
-    Lines(Lines),
-    /// Line-strip primitives.
-    LineStrips(LineStrips),
-    /// Polygon primitives which may contain holes.
-    Polygons(Polygons),
-    /// Polygon primitives that cannot contain holes.
-    PolyList(PolyList),
-    /// Triangle primitives.
-    Triangles(Triangles),
-    /// Triangle-fan primitives.
-    TriFans(TriFans),
-    /// Triangle-strip primitives.
-    TriStrips(TriStrips),
+macro_rules! mk_primitive {
+    ($($(#[$doc:meta])* $name:ident($as:ident),)*) => {
+        /// A collection of primitive elements.
+        #[derive(Clone, Debug)]
+        pub enum Primitive {
+            $($(#[$doc])* $name($name),)*
+        }
+
+        impl Primitive {
+            /// Parse a [`Primitive`] from an XML element.
+            pub fn parse(e: &Element) -> Result<Option<Self>> {
+                Ok(Some(match e.name() {
+                    $($name::NAME => Self::$name(Geom::parse(e)?),)*
+                    _ => return Ok(None),
+                }))
+            }
+
+            $(
+                /// An accessor for the variant.
+                pub fn $as(&self) -> Option<&$name> {
+                    if let Self::$name(x) = self {
+                        Some(x)
+                    } else {
+                        None
+                    }
+                }
+            )*
+        }
+
+    }
 }
 
-impl Primitive {
-    /// Parse a [`Primitive`] from an XML element.
-    pub fn parse(e: &Element) -> Result<Option<Self>> {
-        Ok(Some(match e.name() {
-            LineGeom::NAME => Primitive::Lines(Geom::parse(e)?),
-            LineStripGeom::NAME => Primitive::LineStrips(Geom::parse(e)?),
-            PolygonGeom::NAME => Primitive::Polygons(Geom::parse(e)?),
-            PolyListGeom::NAME => Primitive::PolyList(Geom::parse(e)?),
-            TriangleGeom::NAME => Primitive::Triangles(Geom::parse(e)?),
-            TriFanGeom::NAME => Primitive::TriFans(Geom::parse(e)?),
-            TriStripGeom::NAME => Primitive::TriStrips(Geom::parse(e)?),
-            _ => return Ok(None),
-        }))
-    }
+mk_primitive! {
+    /// Line primitives.
+    Lines(as_lines),
+    /// Line-strip primitives.
+    LineStrips(as_line_strips),
+    /// Polygon primitives which may contain holes.
+    Polygons(as_polygons),
+    /// Polygon primitives that cannot contain holes.
+    PolyList(as_polylist),
+    /// Triangle primitives.
+    Triangles(as_triangles),
+    /// Triangle-fan primitives.
+    TriFans(as_trifans),
+    /// Triangle-strip primitives.
+    TriStrips(as_tristrips),
 }
 
 /// The data for a [`Lines`] element.

@@ -160,7 +160,10 @@ pub struct Input {
     /// The user-defined meaning of the input connection.
     pub semantic: Semantic,
     /// The location of the data source.
-    pub source: UrlRef<Source>,
+    /// The type referenced here depends on the `semantic`:
+    /// * For [`Semantic::Vertex`] it references a [`Vertices`]
+    /// * For most other semantics it references a [`Source`]
+    pub source: Url,
 }
 
 impl XNode for Input {
