@@ -47,6 +47,26 @@ impl Transform {
             Transform::Skew(tr) => tr.as_matrix(),
         }
     }
+
+    #[cfg(feature = "nalgebra")]
+    /// Prepend this transformation to the matrix. Equivalent to `*mat *= self.as_matrix()`.
+    pub fn prepend_to_matrix(&self, mat: &mut Matrix4<f32>) {
+        match self {
+            Transform::Translate(tr) => tr.prepend_to_matrix(mat),
+            Transform::Scale(tr) => tr.prepend_to_matrix(mat),
+            _ => *mat *= self.as_matrix(),
+        }
+    }
+
+    #[cfg(feature = "nalgebra")]
+    /// Append this transformation to the matrix. Equivalent to `*mat = self.as_matrix() * *mat`.
+    pub fn append_to_matrix(&self, mat: &mut Matrix4<f32>) {
+        match self {
+            Transform::Translate(tr) => tr.append_to_matrix(mat),
+            Transform::Scale(tr) => tr.append_to_matrix(mat),
+            _ => *mat = self.as_matrix() * *mat,
+        }
+    }
 }
 
 /// A [`RigidBody`] transform is a subset of the full set of [`Transform`]s
@@ -75,6 +95,24 @@ impl RigidTransform {
         match self {
             RigidTransform::Translate(tr) => tr.as_matrix(),
             RigidTransform::Rotate(tr) => tr.as_matrix(),
+        }
+    }
+
+    #[cfg(feature = "nalgebra")]
+    /// Prepend this transformation to the matrix. Equivalent to `*mat *= self.as_matrix()`.
+    pub fn prepend_to_matrix(&self, mat: &mut Matrix4<f32>) {
+        match self {
+            RigidTransform::Translate(tr) => tr.prepend_to_matrix(mat),
+            _ => *mat *= self.as_matrix(),
+        }
+    }
+
+    #[cfg(feature = "nalgebra")]
+    /// Append this transformation to the matrix. Equivalent to `*mat = self.as_matrix() * *mat`.
+    pub fn append_to_matrix(&self, mat: &mut Matrix4<f32>) {
+        match self {
+            RigidTransform::Translate(tr) => tr.append_to_matrix(mat),
+            _ => *mat = self.as_matrix() * *mat,
         }
     }
 }
@@ -211,6 +249,18 @@ impl Scale {
     pub fn as_matrix(&self) -> Matrix4<f32> {
         Matrix4::new_nonuniform_scaling(&Vector3::from_row_slice(&*self.0))
     }
+
+    #[cfg(feature = "nalgebra")]
+    /// Convert this transformation to a [`nalgebra::Matrix4`].
+    pub fn prepend_to_matrix(&self, mat: &mut Matrix4<f32>) {
+        mat.prepend_nonuniform_scaling_mut(&Vector3::from_row_slice(&*self.0))
+    }
+
+    #[cfg(feature = "nalgebra")]
+    /// Convert this transformation to a [`nalgebra::Matrix4`].
+    pub fn append_to_matrix(&self, mat: &mut Matrix4<f32>) {
+        mat.append_nonuniform_scaling_mut(&Vector3::from_row_slice(&*self.0))
+    }
 }
 
 /// Specifies how to deform an object along one axis.
@@ -290,5 +340,17 @@ impl Translate {
     /// Convert this transformation to a [`nalgebra::Matrix4`].
     pub fn as_matrix(&self) -> Matrix4<f32> {
         Matrix4::new_translation(&Vector3::from_row_slice(&*self.0))
+    }
+
+    #[cfg(feature = "nalgebra")]
+    /// Convert this transformation to a [`nalgebra::Matrix4`].
+    pub fn prepend_to_matrix(&self, mat: &mut Matrix4<f32>) {
+        mat.prepend_translation_mut(&Vector3::from_row_slice(&*self.0))
+    }
+
+    #[cfg(feature = "nalgebra")]
+    /// Convert this transformation to a [`nalgebra::Matrix4`].
+    pub fn append_to_matrix(&self, mat: &mut Matrix4<f32>) {
+        mat.append_translation_mut(&Vector3::from_row_slice(&*self.0))
     }
 }

@@ -1,5 +1,8 @@
 use crate::*;
 
+#[cfg(feature = "nalgebra")]
+use nalgebra::Matrix4;
+
 /// Embodies the entire set of information that can be visualized
 /// from the contents of a COLLADA resource.
 #[derive(Clone, Default, Debug)]
@@ -122,6 +125,35 @@ impl XNode for Node {
             children: Node::parse_list(&mut it)?,
             extra: Extra::parse_many(it)?,
         })
+    }
+}
+
+#[cfg(feature = "nalgebra")]
+impl Node {
+    /// Apply the transformation stack on this node to a [`Matrix4`].
+    /// If `mat` beforehand is the transformation applying at the parent of the
+    /// current node, then `mat` after this call is the transformation that
+    /// applies to everything in this node and in the children.
+    pub fn prepend_transforms(&self, mat: &mut Matrix4<f32>) {
+        for t in &self.transforms {
+            t.prepend_to_matrix(mat)
+        }
+    }
+
+    /// Apply the transformation stack on this node to a [`Matrix4`].
+    /// If `mat` before this call is a transformation applying to a child of this node,
+    /// then `mat` afterward is the transformation situating the child in the parent frame.
+    pub fn append_transforms(&self, mat: &mut Matrix4<f32>) {
+        for t in self.transforms.iter().rev() {
+            t.append_to_matrix(mat)
+        }
+    }
+
+    /// Convert this node's transformation stack to a [`Matrix4`].
+    pub fn transform_as_matrix(&self) -> Matrix4<f32> {
+        let mut mat = Matrix4::identity();
+        self.prepend_transforms(&mut mat);
+        mat
     }
 }
 
