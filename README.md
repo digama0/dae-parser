@@ -8,14 +8,6 @@
 
 <!-- cargo-sync-readme start -->
 
-[License: MIT](./LICENSE-MIT)
-[Apache License 2.0](./LICENSE-APACHE)
-[docs.rs](https://docs.rs/dae-parser)
-[crates.io](https://crates.io/crates/dae-parser)
-[Download numbers](https://crates.io/crates/dae-parser)
-[Github CI](https://github.com/digama0/dae-parser/actions)
-[Minimum rustc version](#rust-version-requirements)
-
 # Collada parser
 
 This is a parser for the Collada (`.dae`) format, used for interchange between 3D renderers

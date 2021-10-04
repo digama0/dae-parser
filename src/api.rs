@@ -76,8 +76,14 @@ impl<'a, T: ParseLibrary + 'a> Iterator for ItemIter<'a, T> {
     }
 }
 
+/// A trait for types that can be enumerated in a [`Document`]. This is used to power the
+/// [`for_each`](Document::for_each) and [`try_for_each`](Document::try_for_each) functions.
 pub trait Traversable {
-    fn traverse<'a, E>(_: &'a Document, _: impl FnMut(&'a Self) -> Result<(), E>) -> Result<(), E>
+    /// Run the function `f` on all elements of type `Self` in the document `doc`.
+    fn traverse<'a, E>(
+        doc: &'a Document,
+        f: impl FnMut(&'a Self) -> Result<(), E>,
+    ) -> Result<(), E>
     where
         Self: 'a;
 }
@@ -186,6 +192,17 @@ impl<'a, T> LocalMap<'a, T> {
             Url::Other(_) => None,
         }
     }
+
+    /// Look up the value an instance is pointing to.
+    ///
+    /// This is a simple wrapper around [`get_url`](Self::get_url), but it has better type safety,
+    /// since the `url` field in an [`Instance<T>`] is a reference to a `T`.
+    pub fn get_instance(&self, inst: &Instance<T>) -> Option<&'a T>
+    where
+        T: Instantiate,
+    {
+        self.get_url(&inst.url)
+    }
 }
 
 impl Document {
@@ -210,5 +227,12 @@ impl Document {
         let mut map = LocalMap::default();
         self.try_for_each(|v: &T| map.push(v))?;
         Ok(map)
+    }
+
+    /// Convenience function, to return the main [`VisualScene`]
+    /// referred to in the `scene` field.
+    pub fn get_visual_scene(&self) -> Option<&VisualScene> {
+        let scene = self.scene.as_ref()?.instance_visual_scene.as_ref()?;
+        self.local_map().ok()?.get_instance(scene)
     }
 }
