@@ -293,12 +293,12 @@ pub struct VertexWeights {
     pub joint: usize,
     /// Contains a list of integers, each specifying the number of
     /// bones associated with one of the influences defined by [`VertexWeights`].
-    pub vcount: Option<Box<[u32]>>,
+    pub vcount: Box<[u32]>,
     /// Contains a list of indices that describe which bones and
     /// attributes are associated with each vertex. An index of `-1`
     /// into the array of joints refers to the bind shape. Weights
     /// should be normalized before use.
-    pub prim: Option<Box<[i32]>>,
+    pub prim: Box<[i32]>,
     /// Provides arbitrary additional information about this element.
     pub extra: Vec<Extra>,
 }
@@ -316,16 +316,11 @@ impl XNode for VertexWeights {
                 .position(|i| i.semantic == Semantic::Joint)
                 .ok_or("vertex_weights: missing JOINT input")?,
             inputs,
-            vcount: parse_opt("vcount", &mut it, parse_array)?,
-            prim: parse_opt("v", &mut it, parse_array)?,
+            vcount: parse_opt("vcount", &mut it, parse_array)?.unwrap_or_default(),
+            prim: parse_opt("v", &mut it, parse_array)?.unwrap_or_default(),
             extra: Extra::parse_many(it)?,
         };
-        validate_vcount(
-            res.count,
-            res.inputs.depth,
-            res.vcount.as_deref(),
-            res.prim.as_deref(),
-        )?;
+        validate_vcount(res.count, res.inputs.depth, &res.vcount, &res.prim)?;
         Ok(res)
     }
 }

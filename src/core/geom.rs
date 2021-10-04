@@ -466,12 +466,12 @@ impl ParseGeom for PolygonGeom {
 pub struct PolyListGeom {
     /// Contains a list of integers, each specifying the number of
     /// vertices for one polygon described by the [`PolyList`] element.
-    pub vcount: Option<Box<[u32]>>,
+    pub vcount: Box<[u32]>,
     /// Contains a list of integers that specify the vertex attributes
     /// (indices) for an individual polylist.
     /// The winding order of vertices produced is counter-clockwise
     /// and describes the front side of each polygon.
-    pub prim: Option<Box<[u32]>>,
+    pub prim: Box<[u32]>,
 }
 
 /// Provides the information needed for a mesh to bind vertex attributes
@@ -481,20 +481,14 @@ pub type PolyList = Geom<PolyListGeom>;
 pub(crate) fn validate_vcount<T>(
     count: usize,
     depth: usize,
-    vcount: Option<&[u32]>,
-    prim: Option<&[T]>,
+    vcount: &[u32],
+    prim: &[T],
 ) -> Result<()> {
-    match (vcount, prim) {
-        (None, None) => {}
-        (Some(vcount), Some(data)) => {
-            if count != vcount.len() {
-                return Err("count does not match <vcount> field".into());
-            }
-            if depth * vcount.iter().sum::<u32>() as usize != data.len() {
-                return Err("vcount does not match <p>/<v> field".into());
-            }
-        }
-        _ => return Err("<vcount> and <p>/<v> should be provided together".into()),
+    if count != vcount.len() {
+        return Err("count does not match <vcount> field".into());
+    }
+    if depth * vcount.iter().sum::<u32>() as usize != prim.len() {
+        return Err("vcount does not match <p>/<v> field".into());
     }
     Ok(())
 }
@@ -504,8 +498,8 @@ impl ParseGeom for PolyListGeom {
 
     fn parse(it: &mut ElementIter<'_>) -> Result<Self> {
         Ok(PolyListGeom {
-            vcount: parse_opt("vcount", it, parse_array)?,
-            prim: parse_opt("p", it, parse_array)?,
+            vcount: parse_opt("vcount", it, parse_array)?.unwrap_or_default(),
+            prim: parse_opt("p", it, parse_array)?.unwrap_or_default(),
         })
     }
 
@@ -513,8 +507,8 @@ impl ParseGeom for PolyListGeom {
         validate_vcount(
             res.count,
             res.inputs.depth,
-            res.data.vcount.as_deref(),
-            res.data.prim.as_deref(),
+            &res.data.vcount,
+            &res.data.prim,
         )
     }
 }
