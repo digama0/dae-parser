@@ -45,7 +45,7 @@ impl XNode for PhysicsMaterial {
 
 /// Specifies physics-material information for the common
 /// profile that all COLLADA implementations must support.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct PhysicsMaterialCommon {
     /// Contains a floating-point number that specifies the dynamic friction coefficient.
     pub dynamic_friction: f32,

@@ -181,7 +181,7 @@ impl XNode for Sampler2D {
 
 /// Wrap modes that affect the interpretation of `s`, `t`, and `p` texture coordinates in `Sampler*`
 /// elements.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WrapMode {
     /// OpenGL symbol `GL_REPEAT`.
     /// Ignores the integer part of texture coordinates, using only the fractional part.
@@ -234,7 +234,7 @@ impl FromStr for WrapMode {
 }
 
 /// (Undocumented?) Enumerated type `fx_sampler_filter_common` from COLLADA spec.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[allow(missing_docs)]
 pub enum SamplerFilterMode {
     None,
@@ -377,7 +377,7 @@ impl XNode for FormatHint {
 
 /// A [`Surface`] initialization option, which specifies
 /// whether to initialize the surface and how to do so.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SurfaceInit {
     /// This surface is intended to be initialized later externally by a [`EffectSetParam`] element.
     /// If it is used before being initialized, there is profile- and platform-specific behavior.
@@ -442,7 +442,7 @@ impl SurfaceInit {
 }
 
 /// Specifies a surface on a cube.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SurfaceFace {
     /// The `+x` face
     PosX,
@@ -483,7 +483,7 @@ impl FromStr for SurfaceFace {
 /// The per-texel layout of the format.
 /// The length of the enumeration string indicates how many channels there are
 /// and each letter represents the name of a channel. There are typically 1 to 4 channels.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SurfaceChannels {
     /// Red/Green/Blue color map.
     RGB,
@@ -523,7 +523,7 @@ impl FromStr for SurfaceChannels {
 /// Some example ranges are signed or unsigned integers, or
 /// are within a clamped range such as 0.0f to 1.0f, or are a
 /// high dynamic range via floating point.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SurfaceRange {
     /// Format represents a decimal value that remains within the -1 to 1 range.
     /// Implementation could be integer, fixed-point, or float.
@@ -560,7 +560,7 @@ impl FromStr for SurfaceRange {
 /// Each channel of the texel has a precision. Typically, channels have the same precision. An
 /// exact format may lower the precision of an individual channel
 /// but applying a higher precision by linking the channels may still convey the same information.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SurfacePrecision {
     /// For integers, this typically represents 8 bits.
     /// For floats, typically 16 bits.
@@ -588,7 +588,7 @@ impl FromStr for SurfacePrecision {
 
 /// Contains additional hints about data relationships and other
 /// things to help an application pick the best format.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SurfaceOption {
     /// Colors are stored with respect
     /// to the sRGB 2.2 gamma curve rather than linear.

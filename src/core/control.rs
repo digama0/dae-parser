@@ -163,7 +163,7 @@ impl XNode for Morph {
 }
 
 /// Which blending technique to use.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MorphMethod {
     /// ```text
     /// (Target1, Target2, ...)*(w1, w2, ...) =

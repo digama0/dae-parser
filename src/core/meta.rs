@@ -129,7 +129,7 @@ impl XNode for Unit {
 
 /// Descriptive information about the coordinate system of the geometric data.
 /// All coordinates are right-handed by definition.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UpAxis {
     /// Right: `-y`, Up: `+x`, In: `+z`
     XUp,

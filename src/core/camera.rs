@@ -145,7 +145,7 @@ impl XNode for Orthographic {
 }
 
 /// Describes the field of view of a perspective camera.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct Perspective {
     /// The horizontal field of view in degrees.
     pub xfov: Option<f32>,

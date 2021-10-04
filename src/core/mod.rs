@@ -57,6 +57,13 @@ impl<T: ParseLibrary> XNode for Library<T> {
 }
 
 macro_rules! mk_libraries {
+    (@mkdoc $($doc:expr, $name:ident, $arg:ident,)*) => {
+        /// A library element, which can be a module of any of the kinds supported by COLLADA.
+        #[derive(Clone, Debug)]
+        pub enum LibraryElement {
+            $(#[doc = $doc] $name(Library<$arg>),)*
+        }
+    };
     ($($(#[$doc:meta])* $name:ident($arg:ident) = $s:literal,)*) => {
         $(impl ParseLibrary for $arg {
             const LIBRARY: &'static str = $s;
@@ -70,11 +77,11 @@ macro_rules! mk_libraries {
             }
         })*
 
-        /// A library element, which can be a module of any of the kinds supported by COLLADA.
-        #[derive(Clone, Debug)]
-        pub enum LibraryElement {
-            $(#[doc = concat!("Declares a module of [`", stringify!($arg), "`] elements.")]
-                $name(Library<$arg>),)*
+        mk_libraries! {
+            @mkdoc $(
+                concat!("Declares a module of [`", stringify!($arg), "`] elements."),
+                $name, $arg,
+            )*
         }
 
         impl LibraryElement {

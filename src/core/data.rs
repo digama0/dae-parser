@@ -218,7 +218,7 @@ pub struct InputList {
     pub depth: usize,
 }
 
-impl std::ops::Deref for InputList {
+impl Deref for InputList {
     type Target = Vec<InputS>;
 
     fn deref(&self) -> &Self::Target {

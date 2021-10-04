@@ -1,4 +1,21 @@
-//! A parser for the COLLADA format (`.dae` extension).
+//! [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE-MIT)
+//! [![Apache License 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](./LICENSE-APACHE)
+//! [![docs.rs](https://docs.rs/dae-parser/badge.svg)](https://docs.rs/dae-parser)
+//! [![crates.io](https://img.shields.io/crates/v/dae-parser.svg)](https://crates.io/crates/dae-parser)
+//! [![Download numbers](https://img.shields.io/crates/d/dae-parser.svg)](https://crates.io/crates/dae-parser)
+//! [![Github CI](https://github.com/digama0/dae-parser/workflows/Continuous%20integration/badge.svg)](https://github.com/digama0/dae-parser/actions)
+//! [![Minimum rustc version](https://img.shields.io/badge/rustc-1.51.0+-lightgray.svg)](#rust-version-requirements)
+//!
+//! # Collada parser
+//!
+//! This is a parser for the Collada (`.dae`) format, used for interchange between 3D renderers
+//! and games. Compared to the [`collada`](https://crates.io/crates/collada) crate,
+//! this crate attempts to more directly represent the Collada data model, and it is also
+//! significantly more complete.
+//!
+//! Currently it only supports reading, but writing is a planned addition.
+//!
+//! ## Usage
 //!
 //! The main entry point is the [`Document`] type, which has a [`FromStr`] implementation to convert
 //! literal strings / slices, or [`Document::from_file`] to read from a `.dae` file on disk.
@@ -9,7 +26,8 @@
 //! as all the data structures are public, and reflect the XML schema closely.
 //!
 //! This library implements only version 1.4.1 of the Collada spec, although it may be expanded
-//! in the future (PRs welcome).
+//! in the future. (Please open an issue or PR if you find anything missing from the spec,
+//! or if you have a use case for a later version.)
 //!
 //! ```
 //! use std::str::FromStr;
@@ -72,45 +90,43 @@
 //!     .unwrap();
 //! assert_eq!(source.id.as_deref(), Some("Cube-mesh-positions"));
 //! ```
+//! ## License
+//!
+//! Licensed under either of
+//!
+//!  * Apache License, Version 2.0
+//!    ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
+//!  * MIT license
+//!    ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+//!
+//! at your option.
+//!
+//! ## Contribution
+//!
+//! Unless you explicitly state otherwise, any contribution intentionally submitted
+//! for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
+//! dual licensed as above, without any additional terms or conditions.
 
-#![forbid(unsafe_code)]
-#![warn(missing_docs)]
+#![deny(unsafe_code)]
+#![warn(
+    missing_docs,
+    missing_debug_implementations,
+    missing_copy_implementations,
+    trivial_casts,
+    trivial_numeric_casts,
+    unused_import_braces,
+    unused_qualifications
+)]
 
-macro_rules! mk_extensible_enum {
-    ($(#[$tydoc:meta])* pub enum $ty:ident { $($(#[$doc:meta])* $n:ident = $t:literal,)* }) => {
-        $(#[$tydoc])*
-        #[derive(Clone, Debug, PartialEq, Eq)]
-        pub enum $ty {
-            $($(#[$doc])* $n,)*
-            /// Any value not covered above
-            Other(Box<str>),
-        }
-
-        impl $ty {
-            fn parse(s: &str) -> Self {
-                match s {
-                    $($t => Self::$n,)*
-                    _ => Self::Other(s.into()),
-                }
-            }
-        }
-
-        impl FromStr for $ty {
-            type Err = std::convert::Infallible;
-
-            fn from_str(s: &str) -> Result<Self, Self::Err> {
-                Ok(Self::parse(s))
-            }
-        }
-    };
-}
-
+#[macro_use]
+mod macros;
 mod api;
 mod core;
 mod fx;
 mod physics;
 mod url;
 
+use crate::api::*;
 use std::convert::{TryFrom, TryInto};
 use std::fmt::Debug;
 use std::io::{BufRead, BufReader};
@@ -337,18 +353,6 @@ pub trait XNode: Sized {
         }
         Ok(arr)
     }
-}
-
-/// A generic ID getter function.
-pub trait HasId {
-    /// Get the ID of the node.
-    fn id(&self) -> Option<&str>;
-}
-
-/// A generic scoped ID getter function.
-pub trait HasSId {
-    /// Get the sid of the node.
-    fn sid(&self) -> Option<&str>;
 }
 
 /// A Collada document. Represents the `<COLLADA>` root node.

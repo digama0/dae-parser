@@ -100,7 +100,7 @@ pub struct RigidBody {
     pub extra: Vec<Extra>,
 }
 
-impl std::ops::Deref for RigidBody {
+impl Deref for RigidBody {
     type Target = RigidBodyCommon;
 
     fn deref(&self) -> &Self::Target {
@@ -184,7 +184,7 @@ pub struct InstanceRigidBody {
     pub extra: Vec<Extra>,
 }
 
-impl std::ops::Deref for InstanceRigidBody {
+impl Deref for InstanceRigidBody {
     type Target = InstanceRigidBodyCommon;
 
     fn deref(&self) -> &Self::Target {
@@ -224,7 +224,7 @@ pub struct InstanceRigidBodyCommon {
     pub common: RigidBodyCommon,
 }
 
-impl std::ops::Deref for InstanceRigidBodyCommon {
+impl Deref for InstanceRigidBodyCommon {
     type Target = RigidBodyCommon;
 
     fn deref(&self) -> &Self::Target {
@@ -385,7 +385,7 @@ impl Limits {
 }
 
 /// A spring constraint, used for both linear and angular constraints.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct Spring {
     /// The `stiffness` (also called spring coefficient)
     /// has units of force/distance for `spring_linear`

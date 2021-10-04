@@ -301,7 +301,7 @@ pub struct LineGeom {
 /// together and then organize those vertices into individual lines.
 pub type Lines = Geom<LineGeom>;
 
-impl std::ops::Deref for LineGeom {
+impl Deref for LineGeom {
     type Target = Option<Box<[u32]>>;
 
     fn deref(&self) -> &Self::Target {
@@ -343,7 +343,7 @@ pub struct LineStripGeom {
 /// connected line-strips.
 pub type LineStrips = Geom<LineStripGeom>;
 
-impl std::ops::Deref for LineStripGeom {
+impl Deref for LineStripGeom {
     type Target = Vec<Box<[u32]>>;
 
     fn deref(&self) -> &Self::Target {
@@ -392,7 +392,7 @@ pub struct PolygonGeom(
 /// together and then organize those vertices into individual polygons.
 pub type Polygons = Geom<PolygonGeom>;
 
-impl std::ops::Deref for PolygonGeom {
+impl Deref for PolygonGeom {
     type Target = Vec<PolygonHole>;
 
     fn deref(&self) -> &Self::Target {
@@ -514,7 +514,7 @@ pub struct TriangleGeom {
 /// together and then organize those vertices into individual triangles.
 pub type Triangles = Geom<TriangleGeom>;
 
-impl std::ops::Deref for TriangleGeom {
+impl Deref for TriangleGeom {
     type Target = Option<Box<[u32]>>;
 
     fn deref(&self) -> &Self::Target {
@@ -560,7 +560,7 @@ pub struct TriFanGeom {
 /// together and then organize those vertices into connected triangles.
 pub type TriFans = Geom<TriFanGeom>;
 
-impl std::ops::Deref for TriFanGeom {
+impl Deref for TriFanGeom {
     type Target = Vec<Box<[u32]>>;
 
     fn deref(&self) -> &Self::Target {
@@ -607,7 +607,7 @@ pub struct TriStripGeom {
 /// together and then organize those vertices into connected triangles.
 pub type TriStrips = Geom<TriStripGeom>;
 
-impl std::ops::Deref for TriStripGeom {
+impl Deref for TriStripGeom {
     type Target = Vec<Box<[u32]>>;
 
     fn deref(&self) -> &Self::Target {

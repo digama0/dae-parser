@@ -2,6 +2,18 @@ use std::{collections::HashMap, marker::PhantomData};
 
 use super::*;
 
+/// A generic ID getter function.
+pub trait HasId {
+    /// Get the ID of the node.
+    fn id(&self) -> Option<&str>;
+}
+
+/// A generic scoped ID getter function.
+pub trait HasSId {
+    /// Get the sid of the node.
+    fn sid(&self) -> Option<&str>;
+}
+
 impl Document {
     /// Returns an iterator over `Library<T>` elements.
     pub fn library_iter<T>(&self) -> LibraryIter<'_, T> {
@@ -21,6 +33,7 @@ impl Document {
 
 /// An iterator over all `Library<T>` elements for a particular `T`,
 /// returned by [`Document::library_iter`].
+#[derive(Debug)]
 pub struct LibraryIter<'a, T> {
     iter: std::slice::Iter<'a, LibraryElement>,
     _marker: PhantomData<T>,
@@ -41,6 +54,7 @@ impl<'a, T: ParseLibrary + 'a> Iterator for LibraryIter<'a, T> {
 
 /// An iterator over all `T` elements for a `ParseLibrary` type `T`,
 /// returned by [`Document::iter`].
+#[derive(Debug)]
 pub struct ItemIter<'a, T> {
     iter: LibraryIter<'a, T>,
     item: std::slice::Iter<'a, T>,
@@ -134,6 +148,7 @@ impl Traversable for Vertices {
 }
 
 /// A map for looking up elements of type `T` in the document by ID.
+#[derive(Debug)]
 pub struct LocalMap<'a, T>(pub HashMap<&'a str, &'a T>);
 
 impl<'a, T> Default for LocalMap<'a, T> {

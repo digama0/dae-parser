@@ -62,3 +62,23 @@ jobs:
         with:
           command: clippy
           args: -- -D warnings
+
+  msrv:
+    strategy:
+      matrix:
+        rust-version: [1.51.0]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone Git repository
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+      - name: Install Rust version ${{ matrix.rust-version }}
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust-version }}
+          override: true
+      - name: Check whether it compiles
+        run: |
+          cargo check --all-features
