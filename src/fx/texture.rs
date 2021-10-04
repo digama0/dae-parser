@@ -138,14 +138,14 @@ pub struct Sampler2D {
     /// followed by a homogeneous warping implied by the mapping to framebuffer space,
     /// then a filtering, followed finally by a resampling of the filtered, warped,
     /// reconstructed image before applying it to a fragment.
-    pub min_filter: SamplerFilterMode,
+    pub min_filter: SamplerFilter,
     /// Texture magnification. Enumerated type
     /// fx_sampler_filter_common. When gamma indicates
     /// magnification, this value determines how the texture value is
     /// obtained.
-    pub mag_filter: SamplerFilterMode,
+    pub mag_filter: SamplerFilter,
     /// MIPmap filter.
-    pub mip_filter: SamplerFilterMode,
+    pub mip_filter: SamplerFilter,
     /// When reading past the edge of the texture address space
     /// based on the wrap modes involving clamps, this color takes
     /// over. Type `fx_color_common` (four floating-point numbers in RGBA order).
@@ -236,7 +236,7 @@ impl FromStr for WrapMode {
 /// (Undocumented?) Enumerated type `fx_sampler_filter_common` from COLLADA spec.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[allow(missing_docs)]
-pub enum SamplerFilterMode {
+pub enum SamplerFilter {
     None,
     Nearest,
     Linear,
@@ -246,13 +246,13 @@ pub enum SamplerFilterMode {
     LinearMipmapLinear,
 }
 
-impl Default for SamplerFilterMode {
+impl Default for SamplerFilter {
     fn default() -> Self {
         Self::None
     }
 }
 
-impl FromStr for SamplerFilterMode {
+impl FromStr for SamplerFilter {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
