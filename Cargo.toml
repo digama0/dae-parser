@@ -14,3 +14,4 @@ metadata = { msrv = "1.51.0" }
 [dependencies]
 minidom = "0.13"
 percent-encoding = "2.1"
+nalgebra = { version = "0.29", optional = true }

@@ -1,5 +1,8 @@
 use crate::*;
 
+#[cfg(feature = "nalgebra")]
+use nalgebra::{Matrix4, Point3, Vector3};
+
 /// A transformation, that can be represented as a matrix
 /// (but may be expressed in another way for convenience).
 #[derive(Clone, Debug)]
@@ -31,6 +34,19 @@ impl Transform {
             _ => Ok(None),
         }
     }
+
+    #[cfg(feature = "nalgebra")]
+    /// Convert this transformation to a [`nalgebra::Matrix4`].
+    pub fn as_matrix(&self) -> Matrix4<f32> {
+        match self {
+            Transform::Translate(tr) => tr.as_matrix(),
+            Transform::Rotate(tr) => tr.as_matrix(),
+            Transform::LookAt(tr) => tr.as_matrix(),
+            Transform::Matrix(tr) => tr.as_matrix(),
+            Transform::Scale(tr) => tr.as_matrix(),
+            Transform::Skew(tr) => tr.as_matrix(),
+        }
+    }
 }
 
 /// A [`RigidBody`] transform is a subset of the full set of [`Transform`]s
@@ -50,6 +66,15 @@ impl RigidTransform {
             Translate::NAME => Ok(Some(Self::Translate(Translate::parse(e)?))),
             Rotate::NAME => Ok(Some(Self::Rotate(Rotate::parse(e)?))),
             _ => Ok(None),
+        }
+    }
+
+    #[cfg(feature = "nalgebra")]
+    /// Convert this transformation to a [`nalgebra::Matrix4`].
+    pub fn as_matrix(&self) -> Matrix4<f32> {
+        match self {
+            RigidTransform::Translate(tr) => tr.as_matrix(),
+            RigidTransform::Rotate(tr) => tr.as_matrix(),
         }
     }
 }
@@ -73,6 +98,35 @@ impl XNode for LookAt {
     }
 }
 
+impl LookAt {
+    /// The eye position for this look-at orientation.
+    #[inline]
+    pub fn eye(&self) -> &[f32; 3] {
+        self.0[0..3].try_into().unwrap()
+    }
+
+    /// The target position (interest point) for this look-at orientation.
+    #[inline]
+    pub fn target(&self) -> &[f32; 3] {
+        self.0[3..6].try_into().unwrap()
+    }
+
+    /// The up direction for this look-at orientation.
+    #[inline]
+    pub fn up(&self) -> &[f32; 3] {
+        self.0[6..9].try_into().unwrap()
+    }
+
+    #[cfg(feature = "nalgebra")]
+    /// Convert this transformation to a [`nalgebra::Matrix4`].
+    pub fn as_matrix(&self) -> Matrix4<f32> {
+        let eye = Point3::from_slice(self.eye());
+        let target = Point3::from_slice(self.target());
+        let up = Vector3::from_column_slice(self.up());
+        Matrix4::look_at_rh(&eye, &target, &up)
+    }
+}
+
 /// Describes transformations that embody mathematical changes to points
 /// within a coordinate system or the coordinate system itself.
 #[derive(Clone, Debug)]
@@ -88,6 +142,14 @@ impl XNode for Matrix {
     fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         Ok(Matrix(parse_array_n(element)?))
+    }
+}
+
+impl Matrix {
+    #[cfg(feature = "nalgebra")]
+    /// Convert this transformation to a [`nalgebra::Matrix4`].
+    pub fn as_matrix(&self) -> Matrix4<f32> {
+        Matrix4::from_column_slice(&*self.0)
     }
 }
 
@@ -108,6 +170,25 @@ impl XNode for Rotate {
     }
 }
 
+impl Rotate {
+    /// The rotation axis of this rotation transform.
+    pub fn axis(&self) -> &[f32; 3] {
+        self.0[0..3].try_into().unwrap()
+    }
+
+    /// The magnitude of this rotation transform in degrees.
+    pub fn angle(&self) -> f32 {
+        self.0[3]
+    }
+
+    #[cfg(feature = "nalgebra")]
+    /// Convert this transformation to a [`nalgebra::Matrix4`].
+    pub fn as_matrix(&self) -> Matrix4<f32> {
+        let axis = Vector3::from_column_slice(self.axis()).normalize();
+        Matrix4::from_axis_angle(&nalgebra::Unit::new_normalize(axis), self.angle())
+    }
+}
+
 /// Specifies how to change an object’s size.
 #[derive(Clone, Debug)]
 pub struct Scale(
@@ -121,6 +202,14 @@ impl XNode for Scale {
     fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         Ok(Scale(parse_array_n(element)?))
+    }
+}
+
+impl Scale {
+    #[cfg(feature = "nalgebra")]
+    /// Convert this transformation to a [`nalgebra::Matrix4`].
+    pub fn as_matrix(&self) -> Matrix4<f32> {
+        Matrix4::new_nonuniform_scaling(&Vector3::from_row_slice(&*self.0))
     }
 }
 
@@ -141,6 +230,45 @@ impl XNode for Skew {
     }
 }
 
+impl Skew {
+    /// The angle of this skew transformation.
+    #[inline]
+    pub fn angle(&self) -> f32 {
+        self.0[0]
+    }
+
+    /// The axis of rotation for this skew transformation.
+    #[inline]
+    pub fn axis(&self) -> &[f32; 3] {
+        self.0[1..4].try_into().unwrap()
+    }
+
+    /// The axis of translation for this skew transformation.
+    #[inline]
+    pub fn trans(&self) -> &[f32; 3] {
+        self.0[4..7].try_into().unwrap()
+    }
+
+    #[cfg(feature = "nalgebra")]
+    /// Convert this transformation to a [`nalgebra::Matrix4`].
+    pub fn as_matrix(&self) -> Matrix4<f32> {
+        // From the RenderMan spec (on which the COLLADA operation is based):
+        //
+        // This operation shifts all points along lines
+        // parallel to the axis vector (dx2, dy2, dz2).
+        // Points along the axis vector (dx1, dy1, dz1)
+        // are mapped onto the vector (x, y, z),
+        // where angle specifies the angle (in degrees)
+        // between the vectors (dx1, dy1, dz1) and (x, y, z),
+        // The two axes are not required to be perpendicular,
+        // however it is an error to specify an angle that is greater than
+        // or equal to the angle between them.
+        // A negative angle can be specified,
+        // but it must be greater than 180 degrees minus the angle between the two axes.
+        unimplemented!("<skew> transforms are not supported")
+    }
+}
+
 /// Changes the position of an object in a local coordinate system.
 #[derive(Clone, Debug)]
 pub struct Translate(
@@ -154,5 +282,13 @@ impl XNode for Translate {
     fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         Ok(Translate(parse_array_n(element)?))
+    }
+}
+
+impl Translate {
+    #[cfg(feature = "nalgebra")]
+    /// Convert this transformation to a [`nalgebra::Matrix4`].
+    pub fn as_matrix(&self) -> Matrix4<f32> {
+        Matrix4::new_translation(&Vector3::from_row_slice(&*self.0))
     }
 }
