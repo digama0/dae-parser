@@ -1,3 +1,11 @@
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE-MIT)
+[![Apache License 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](./LICENSE-APACHE)
+[![docs.rs](https://docs.rs/dae-parser/badge.svg)](https://docs.rs/dae-parser)
+[![crates.io](https://img.shields.io/crates/v/dae-parser.svg)](https://crates.io/crates/dae-parser)
+[![Download numbers](https://img.shields.io/crates/d/dae-parser.svg)](https://crates.io/crates/dae-parser)
+[![Github CI](https://github.com/digama0/dae-parser/workflows/Continuous%20integration/badge.svg)](https://github.com/digama0/dae-parser/actions)
+[![Minimum rustc version](https://img.shields.io/badge/rustc-1.51.0+-lightgray.svg)](#rust-version-requirements)
+
 <!-- cargo-sync-readme start -->
 
 [License: MIT](./LICENSE-MIT)
@@ -97,9 +105,9 @@ assert_eq!(source.id.as_deref(), Some("Cube-mesh-positions"));
 Licensed under either of
 
  * Apache License, Version 2.0
-   ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
+   ([LICENSE-APACHE](LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
  * MIT license
-   ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+   ([LICENSE-MIT](LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
 
 at your option.
 
