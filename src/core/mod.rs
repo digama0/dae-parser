@@ -64,18 +64,29 @@ macro_rules! mk_libraries {
             $(#[doc = $doc] $name(Library<$arg>),)*
         }
     };
-    ($($(#[$doc:meta])* $name:ident($arg:ident) = $s:literal,)*) => {
-        $(impl ParseLibrary for $arg {
-            const LIBRARY: &'static str = $s;
+    ($($(#[derive(Traversable $($mark:literal)?)])? $name:ident($arg:ident) = $s:literal,)*) => {
+        $(
+            $(impl Traversable $($mark)? for $arg {
+                fn traverse<'a, E>(
+                    doc: &'a Document,
+                    f: impl FnMut(&'a $arg) -> Result<(), E>,
+                ) -> Result<(), E> {
+                    doc.iter().try_for_each(f)
+                }
+            })?
 
-            fn extract_element(e: &LibraryElement) -> Option<&Library<Self>> {
-                if let LibraryElement::$name(arg) = e {
-                    Some(arg)
-                } else {
-                    None
+            impl ParseLibrary for $arg {
+                const LIBRARY: &'static str = $s;
+
+                fn extract_element(e: &LibraryElement) -> Option<&Library<Self>> {
+                    if let LibraryElement::$name(arg) = e {
+                        Some(arg)
+                    } else {
+                        None
+                    }
                 }
             }
-        })*
+        )*
 
         mk_libraries! {
             @mkdoc $(
@@ -98,20 +109,20 @@ macro_rules! mk_libraries {
 
 mk_libraries! {
     Animations(Animation) = "library_animations",
-    AnimationClips(AnimationClip) = "library_animation_clips",
-    Cameras(Camera) = "library_cameras",
-    Controllers(Controller) = "library_controllers",
-    Effects(Effect) = "library_effects",
-    ForceFields(ForceField) = "library_force_fields",
-    Geometries(Geometry) = "library_geometries",
-    Images(Image) = "library_images",
-    Lights(Light) = "library_lights",
-    Materials(Material) = "library_materials",
+    #[derive(Traversable)] AnimationClips(AnimationClip) = "library_animation_clips",
+    #[derive(Traversable)] Cameras(Camera) = "library_cameras",
+    #[derive(Traversable)] Controllers(Controller) = "library_controllers",
+    #[derive(Traversable)] Effects(Effect) = "library_effects",
+    #[derive(Traversable)] ForceFields(ForceField) = "library_force_fields",
+    #[derive(Traversable)] Geometries(Geometry) = "library_geometries",
+    #[derive(Traversable)] Images(Image) = "library_images",
+    #[derive(Traversable)] Lights(Light) = "library_lights",
+    #[derive(Traversable)] Materials(Material) = "library_materials",
     Nodes(Node) = "library_nodes",
-    PhysicsMaterials(PhysicsMaterial) = "library_physics_materials",
-    PhysicsModels(PhysicsModel) = "library_physics_models",
-    PhysicsScenes(PhysicsScene) = "library_physics_scenes",
-    VisualScenes(VisualScene) = "library_visual_scenes",
+    #[derive(Traversable)] PhysicsMaterials(PhysicsMaterial) = "library_physics_materials",
+    #[derive(Traversable)] PhysicsModels(PhysicsModel) = "library_physics_models",
+    #[derive(Traversable)] PhysicsScenes(PhysicsScene) = "library_physics_scenes",
+    #[derive(Traversable)] VisualScenes(VisualScene) = "library_visual_scenes",
 }
 
 /// Instantiates a COLLADA material resource,
