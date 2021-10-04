@@ -55,6 +55,16 @@ impl Instantiate for Geometry {
     }
 }
 
+impl Instance<Geometry> {
+    /// Get the list of [`InstanceMaterial`]s bound in this [`Instance<Geometry>`].
+    pub fn instance_materials(&self) -> &[InstanceMaterial] {
+        match self.data.bind_material {
+            Some(ref m) => &m.instance_material,
+            None => &[],
+        }
+    }
+}
+
 /// An element that describes geometric data.
 #[derive(Clone, Debug)]
 pub enum GeometryElement {

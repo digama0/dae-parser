@@ -1,4 +1,4 @@
-use std::{collections::HashMap, marker::PhantomData};
+use std::{collections::HashMap, marker::PhantomData, ops::Index};
 
 use super::*;
 
@@ -299,6 +299,14 @@ impl<'a, T> LocalMap<'a, T> {
     /// of the special form `#ref`, referring to an element with ID `ref` in the same document.
     pub fn get(&self, url: &UrlRef<T>) -> Option<&'a T> {
         self.get_raw(&url.val)
+    }
+}
+
+impl<'a, T> Index<&UrlRef<T>> for LocalMap<'a, T> {
+    type Output = T;
+
+    fn index(&self, index: &UrlRef<T>) -> &Self::Output {
+        self.get(index).unwrap()
     }
 }
 
