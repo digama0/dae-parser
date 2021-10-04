@@ -103,7 +103,7 @@ impl XNode for AnimationClip {
 #[derive(Clone, Debug)]
 pub struct Channel {
     /// The location of the animation sampler using a URL expression.
-    pub source: Url,
+    pub source: UrlRef<Sampler>,
     /// The location of the element bound to the output of the sampler.
     pub target: Address,
 }

@@ -135,8 +135,8 @@ impl Joints {
 /// Describes the data required to blend between sets of static meshes.
 #[derive(Clone, Debug)]
 pub struct Morph {
-    /// Data for morph weights and for morph targets.
-    pub source: Url,
+    /// Refers to the [`Geometry`] that describes the base mesh.
+    pub source: UrlRef<Geometry>,
     /// Which blending technique to use.
     pub method: MorphMethod,
     /// Data for morph weights and for morph targets.
@@ -200,7 +200,7 @@ impl FromStr for MorphMethod {
 pub struct Skin {
     /// A URI reference to the base mesh (a static mesh or a morphed mesh).
     /// This also provides the bind-shape of the skinned mesh.
-    pub source: Url,
+    pub source: UrlRef<Mesh>,
     /// Provides extra information about the position and
     /// orientation of the base mesh before binding. Contains
     /// sixteen floating-point numbers representing a four-by-

@@ -14,6 +14,57 @@ pub trait HasSId {
     fn sid(&self) -> Option<&str>;
 }
 
+/// A wrapper around a base type `A` to indicate that the value is pointing to
+/// a value of type `T`.
+///
+/// This is not a strict type safety barrier; it is possible to convert a `Ref`
+/// to and from its raw version. However this can help in API documentation,
+/// as well as to assist type inference in functions like [`LocalMap::get`].
+#[derive(Copy, Clone)]
+pub struct Ref<A, T: ?Sized> {
+    /// The underlying storage or "raw" value.
+    pub val: A,
+    _marker: PhantomData<T>,
+}
+
+impl<A: Debug, T: ?Sized> Debug for Ref<A, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.val.fmt(f)
+    }
+}
+
+/// A strongly typed URL referencing a `T`.
+pub type UrlRef<T> = Ref<Url, T>;
+
+/// A strongly typed string referencing a `T`.
+pub type NameRef<T> = Ref<String, T>;
+
+impl<A, T: ?Sized> Deref for Ref<A, T> {
+    type Target = A;
+
+    fn deref(&self) -> &Self::Target {
+        &self.val
+    }
+}
+
+impl<A, T: ?Sized> Ref<A, T> {
+    /// Construct a new `Ref` by wrapping a raw value.
+    pub fn new(val: A) -> Self {
+        Self {
+            val,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<A: FromStr, T: ?Sized> FromStr for Ref<A, T> {
+    type Err = A::Err;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        A::from_str(s).map(Ref::new)
+    }
+}
+
 impl Document {
     /// Returns an iterator over `Library<T>` elements.
     pub fn library_iter<T>(&self) -> LibraryIter<'_, T> {
@@ -178,7 +229,7 @@ impl<'a, T> LocalMap<'a, T> {
     }
 
     /// Look up an element by ID.
-    pub fn get(&self, n: &str) -> Option<&'a T> {
+    pub fn get_str(&self, n: &str) -> Option<&'a T> {
         self.0.get(n).copied()
     }
 
@@ -186,22 +237,22 @@ impl<'a, T> LocalMap<'a, T> {
     ///
     /// This is a local map, meaning that it does not support references to URLs which are not
     /// of the special form `#ref`, referring to an element with ID `ref` in the same document.
-    pub fn get_url(&self, url: &Url) -> Option<&'a T> {
+    pub fn get_raw(&self, url: &Url) -> Option<&'a T> {
         match url {
-            Url::Fragment(n) => self.get(n),
+            Url::Fragment(n) => self.get_str(n),
             Url::Other(_) => None,
         }
     }
 
-    /// Look up the value an instance is pointing to.
+    /// Look up an element by URL reference.
     ///
-    /// This is a simple wrapper around [`get_url`](Self::get_url), but it has better type safety,
-    /// since the `url` field in an [`Instance<T>`] is a reference to a `T`.
-    pub fn get_instance(&self, inst: &Instance<T>) -> Option<&'a T>
-    where
-        T: Instantiate,
-    {
-        self.get_url(&inst.url)
+    /// This is a simple wrapper around [`get_raw`](Self::get_raw),
+    /// but it has better type safety, since it ensures that the reference is a reference to a `T`.
+    ///
+    /// This is a local map, meaning that it does not support references to URLs which are not
+    /// of the special form `#ref`, referring to an element with ID `ref` in the same document.
+    pub fn get(&self, url: &UrlRef<T>) -> Option<&'a T> {
+        self.get_raw(&url.val)
     }
 }
 
@@ -233,6 +284,6 @@ impl Document {
     /// referred to in the `scene` field.
     pub fn get_visual_scene(&self) -> Option<&VisualScene> {
         let scene = self.scene.as_ref()?.instance_visual_scene.as_ref()?;
-        self.local_map().ok()?.get_instance(scene)
+        self.local_map().ok()?.get(&scene.url)
     }
 }

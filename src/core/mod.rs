@@ -135,7 +135,7 @@ pub struct Instance<T: Instantiate> {
     pub sid: Option<String>,
     /// The URL of the location of the `T` element to instantiate.
     /// Can refer to a local instance or external reference.
-    pub url: Url,
+    pub url: UrlRef<T>,
     /// The additional data associated with the instantiation, if any.
     pub data: T::Data,
     /// Provides arbitrary additional information about this element.

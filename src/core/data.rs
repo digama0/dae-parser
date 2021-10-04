@@ -11,7 +11,7 @@ pub struct Accessor {
     /// This element may refer to a COLLADA array element or to an
     /// array data source outside the scope of the document;
     /// the source does not need to be a COLLADA document.
-    pub source: Url,
+    pub source: UrlRef<ArrayElement>,
     /// The number of values that are to be considered a unit during each access to the array.
     /// The default is 1, indicating that a single value is accessed.
     pub stride: usize,
@@ -160,7 +160,7 @@ pub struct Input {
     /// The user-defined meaning of the input connection.
     pub semantic: Semantic,
     /// The location of the data source.
-    pub source: Url,
+    pub source: UrlRef<Source>,
 }
 
 impl XNode for Input {

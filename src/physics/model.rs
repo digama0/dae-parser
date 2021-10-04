@@ -51,7 +51,7 @@ pub struct InstancePhysicsModelData {
     /// Points to the id of a node in the visual scene. This allows a physics model to be
     /// instantiated under a specific transform node, which will dictate the initial position
     /// and orientation, and could be animated to influence kinematic rigid bodies.
-    pub parent: Option<Url>,
+    pub parent: Option<UrlRef<Node>>,
     /// Instantiates a [`ForceField`] element to influence this physics model.
     pub instance_force_field: Vec<Instance<ForceField>>,
     /// Instantiates a [`RigidBody`] element and allows for overriding some or all of its
@@ -171,10 +171,10 @@ impl RigidBodyCommon {
 #[derive(Clone, Debug)]
 pub struct InstanceRigidBody {
     /// Which [`RigidBody`] to instantiate.
-    pub body: String,
+    pub body: NameRef<RigidBody>,
     /// Which [`Node`] is influenced by this [`RigidBody`] instance.
     /// Can refer to a local instance or external reference.
-    pub target: Url,
+    pub target: UrlRef<Node>,
     /// Specifies the rigid-body information for the common
     /// profile that all COLLADA implementations must support.
     pub common: InstanceRigidBodyCommon,
@@ -198,7 +198,7 @@ impl XNode for InstanceRigidBody {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
         Ok(InstanceRigidBody {
-            body: element.attr("body").ok_or("missing body attribute")?.into(),
+            body: Ref::new(element.attr("body").ok_or("missing body attribute")?.into()),
             target: parse_attr(element.attr("target"))?.ok_or("missing url attribute")?,
             common: parse_one(Technique::COMMON, &mut it, InstanceRigidBodyCommon::parse)?,
             technique: Technique::parse_list(&mut it)?,
@@ -344,21 +344,19 @@ impl RigidConstraintCommon {
 #[derive(Clone, Debug)]
 pub struct InstanceRigidConstraint {
     /// Which [`RigidConstraint`] to instantiate.
-    pub constraint: String,
+    pub constraint: NameRef<RigidConstraint>,
     /// Provides arbitrary additional information about this element.
     pub extra: Vec<Extra>,
 }
 
 impl XNode for InstanceRigidConstraint {
     const NAME: &'static str = "instance_rigid_constraint";
-    fn parse(element: &Element) -> Result<Self> {
-        debug_assert_eq!(element.name(), Self::NAME);
+    fn parse(e: &Element) -> Result<Self> {
+        debug_assert_eq!(e.name(), Self::NAME);
+        let constraint = e.attr("constraint").ok_or("missing constraint attr")?;
         Ok(InstanceRigidConstraint {
-            constraint: element
-                .attr("constraint")
-                .ok_or("missing constraint attribute")?
-                .into(),
-            extra: Extra::parse_many(element.children())?,
+            constraint: Ref::new(constraint.into()),
+            extra: Extra::parse_many(e.children())?,
         })
     }
 }

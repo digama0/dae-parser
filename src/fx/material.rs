@@ -52,7 +52,7 @@ pub struct InstanceMaterial {
     /// The fragment identifier is an XPointer shorthand pointer that
     /// consists of the ID of the element to instantiate.
     /// For an external reference, this is an absolute or relative URL.
-    pub target: Url,
+    pub target: UrlRef<Material>,
     /// Which symbol defined from within the geometry this material binds to.
     pub symbol: String,
     /// Connects a parameter in the material’s effect by semantic

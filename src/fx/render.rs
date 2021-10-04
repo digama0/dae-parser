@@ -5,7 +5,7 @@ use crate::*;
 pub struct Render {
     /// Refers to a node that contains a camera describing the viewpoint
     /// from which to render this compositing step.
-    pub camera_node: Url,
+    pub camera_node: UrlRef<Node>,
     /// Specifies which layer or layers to render in this compositing step
     /// while evaluating the scene.
     pub layers: Vec<String>,
