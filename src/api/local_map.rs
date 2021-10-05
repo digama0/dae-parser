@@ -235,6 +235,7 @@ impl<'a> LocalMaps<'a> {
     /// customizing collection before performing the collection pass.
     /// For example, if we only want to collect `Geometry` and `Source` types:
     /// ```
+    /// # use dae_parser::*;
     /// # fn foo(doc: Document) {
     /// let maps = LocalMaps::default()
     ///     .set::<Geometry>()
@@ -251,6 +252,7 @@ impl<'a> LocalMaps<'a> {
     /// customizing collection before performing the collection pass.
     /// For example, if we want to collect everything except the `ForceField` and `Sampler` types:
     /// ```
+    /// # use dae_parser::*;
     /// # fn foo(doc: Document) {
     /// let maps = LocalMaps::new()
     ///     .unset::<ForceField>()
