@@ -70,25 +70,22 @@ let dae_file = r##"\
 </COLLADA>"##;
 
 let document = Document::from_str(dae_file).unwrap();
-let cube = document.local_map::<Geometry>().unwrap().get("Cube-mesh").unwrap();
+let cube = document.local_map::<Geometry>().unwrap().get_str("Cube-mesh").unwrap();
 let sources_map = document.local_map::<Source>().unwrap();
 let vertices_map = document.local_map::<Vertices>().unwrap();
 // sources.get("Cube-mesh-positions").unwrap();
 assert_eq!(cube.id.as_ref().unwrap(), "Cube-mesh");
-let tris = if let GeometryElement::Mesh(mesh) = &cube.element {
-    if let Primitive::Triangles(tris) = &mesh.elements[0] {
-        tris
-    } else { panic!() }
-} else { panic!() };
+let mesh = cube.element.as_mesh().unwrap();
+let tris = mesh.elements[0].as_triangles().unwrap();
 assert_eq!(
     tris.data.as_deref().unwrap(),
     &[3, 1, 0, 1, 5, 2, 3, 4, 1, 1, 4, 5]
 );
 assert_eq!(tris.inputs[0].semantic, Semantic::Vertex);
-let vertices = vertices_map.get_url(&tris.inputs[0].source).unwrap();
+let vertices = vertices_map.get_raw(&tris.inputs[0].source).unwrap();
 assert_eq!(vertices.id, "Cube-mesh-vertices");
 let source = sources_map
-    .get_url(&vertices.position_input().source)
+    .get_raw(&vertices.position_input().source)
     .unwrap();
 assert_eq!(source.id.as_deref(), Some("Cube-mesh-positions"));
 ```
