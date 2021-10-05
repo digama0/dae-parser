@@ -15,12 +15,6 @@ pub struct Geometry {
     pub extra: Vec<Extra>,
 }
 
-impl HasId for Geometry {
-    fn id(&self) -> Option<&str> {
-        self.id.as_deref()
-    }
-}
-
 impl XNode for Geometry {
     const NAME: &'static str = "geometry";
     fn parse(element: &Element) -> Result<Self> {
@@ -62,6 +56,12 @@ impl Instance<Geometry> {
             Some(ref m) => &m.instance_material,
             None => &[],
         }
+    }
+
+    /// Look up an [`InstanceMaterial`] by symbol name.
+    pub fn get_instance_material(&self, symbol: &str) -> Option<&InstanceMaterial> {
+        let bm = self.data.bind_material.as_ref()?;
+        bm.instance_material.iter().find(|mat| mat.symbol == symbol)
     }
 }
 
@@ -176,12 +176,6 @@ pub struct Vertices {
     pub extra: Vec<Extra>,
 }
 
-impl HasId for Vertices {
-    fn id(&self) -> Option<&str> {
-        Some(&self.id)
-    }
-}
-
 impl XNode for Vertices {
     const NAME: &'static str = "vertices";
     fn parse(element: &Element) -> Result<Self> {
@@ -198,6 +192,26 @@ impl XNode for Vertices {
             inputs,
             extra: Extra::parse_many(it)?,
         })
+    }
+}
+
+impl Traversable for Vertices {
+    fn traverse<'a, E>(
+        doc: &'a Document,
+        mut f: impl FnMut(&'a Self) -> Result<(), E>,
+    ) -> Result<(), E>
+    where
+        Self: 'a,
+    {
+        for lib in doc.iter::<Geometry>() {
+            if let GeometryElement::Mesh(Mesh {
+                vertices: Some(v), ..
+            }) = &lib.element
+            {
+                f(v)?
+            }
+        }
+        Ok(())
     }
 }
 

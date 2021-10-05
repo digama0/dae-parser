@@ -18,12 +18,6 @@ pub struct Camera {
     pub extra: Vec<Extra>,
 }
 
-impl HasId for Camera {
-    fn id(&self) -> Option<&str> {
-        self.id.as_deref()
-    }
-}
-
 impl XNode for Camera {
     const NAME: &'static str = "camera";
     fn parse(element: &Element) -> Result<Self> {

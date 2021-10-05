@@ -199,4 +199,20 @@ impl ParamType {
             _ => Self::Other(Box::new(e.clone())),
         }))
     }
+
+    /// Downcast this element to a [`Surface`].
+    pub fn as_surface(&self) -> Option<&Surface> {
+        match self {
+            ParamType::Surface(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    /// Downcast this element to a [`Sampler2D`].
+    pub fn as_sampler2d(&self) -> Option<&Sampler2D> {
+        match self {
+            ParamType::Sampler2D(s) => Some(s),
+            _ => None,
+        }
+    }
 }

@@ -54,6 +54,19 @@ impl Shader {
             _ => return Ok(None),
         }))
     }
+
+    /// Run the function `f` on all arguments of type [`Texture`] in the parameters to this shader.
+    pub fn on_textures<'a, E>(
+        &'a self,
+        f: &mut impl FnMut(&'a Texture) -> Result<(), E>,
+    ) -> Result<(), E> {
+        match self {
+            Shader::Blinn(s) => s.on_textures(f),
+            Shader::Constant(s) => s.on_textures(f),
+            Shader::Lambert(s) => s.on_textures(f),
+            Shader::Phong(s) => s.on_textures(f),
+        }
+    }
 }
 
 /// Produces a specularly shaded surface with a Blinn BRDF approximation.
@@ -104,6 +117,21 @@ impl XNode for Blinn {
     }
 }
 
+impl Blinn {
+    /// Run the function `f` on all arguments of type [`Texture`] in the parameters to this shader.
+    pub fn on_textures<'a, E>(
+        &'a self,
+        f: &mut impl FnMut(&'a Texture) -> Result<(), E>,
+    ) -> Result<(), E> {
+        on_color_as_texture(&self.emission, f)?;
+        on_color_as_texture(&self.ambient, f)?;
+        on_color_as_texture(&self.diffuse, f)?;
+        on_color_as_texture(&self.specular, f)?;
+        on_color_as_texture(&self.reflective, f)?;
+        on_color_as_texture(&self.transparent, f)
+    }
+}
+
 /// Produces a constantly shaded surface that is independent of lighting.
 #[derive(Clone, Default, Debug)]
 pub struct ConstantFx {
@@ -137,6 +165,18 @@ impl XNode for ConstantFx {
             transparency: parse_opt("transparency", &mut it, FloatParam::parse)?,
             index_of_refraction: parse_opt("index_of_refraction", &mut it, FloatParam::parse)?,
         })
+    }
+}
+
+impl ConstantFx {
+    /// Run the function `f` on all arguments of type [`Texture`] in the parameters to this shader.
+    pub fn on_textures<'a, E>(
+        &'a self,
+        f: &mut impl FnMut(&'a Texture) -> Result<(), E>,
+    ) -> Result<(), E> {
+        on_color_as_texture(&self.emission, f)?;
+        on_color_as_texture(&self.reflective, f)?;
+        on_color_as_texture(&self.transparent, f)
     }
 }
 
@@ -179,6 +219,20 @@ impl XNode for Lambert {
             transparency: parse_opt("transparency", &mut it, FloatParam::parse)?,
             index_of_refraction: parse_opt("index_of_refraction", &mut it, FloatParam::parse)?,
         })
+    }
+}
+
+impl Lambert {
+    /// Run the function `f` on all arguments of type [`Texture`] in the parameters to this shader.
+    pub fn on_textures<'a, E>(
+        &'a self,
+        f: &mut impl FnMut(&'a Texture) -> Result<(), E>,
+    ) -> Result<(), E> {
+        on_color_as_texture(&self.emission, f)?;
+        on_color_as_texture(&self.ambient, f)?;
+        on_color_as_texture(&self.diffuse, f)?;
+        on_color_as_texture(&self.reflective, f)?;
+        on_color_as_texture(&self.transparent, f)
     }
 }
 
@@ -231,6 +285,21 @@ impl XNode for Phong {
     }
 }
 
+impl Phong {
+    /// Run the function `f` on all arguments of type [`Texture`] in the parameters to this shader.
+    pub fn on_textures<'a, E>(
+        &'a self,
+        f: &mut impl FnMut(&'a Texture) -> Result<(), E>,
+    ) -> Result<(), E> {
+        on_color_as_texture(&self.emission, f)?;
+        on_color_as_texture(&self.ambient, f)?;
+        on_color_as_texture(&self.diffuse, f)?;
+        on_color_as_texture(&self.specular, f)?;
+        on_color_as_texture(&self.reflective, f)?;
+        on_color_as_texture(&self.transparent, f)
+    }
+}
+
 /// A type that describes color attributes of fixed-function shader elements inside
 /// [`ProfileCommon`] effects.
 #[derive(Clone, Debug)]
@@ -256,6 +325,22 @@ impl ColorParam {
                 _ => return Ok(None),
             }))
         })
+    }
+
+    /// Convert this parameter to a texture reference, if it is one.
+    pub fn as_texture(&self) -> Option<&Texture> {
+        match self {
+            ColorParam::Texture(tex) => Some(tex),
+            _ => None,
+        }
+    }
+
+    /// Get the color literal of this parameter, if it is a literal.
+    pub fn as_color(&self) -> Option<&[f32; 4]> {
+        match self {
+            ColorParam::Color(c) => Some(c),
+            _ => None,
+        }
     }
 }
 
@@ -308,4 +393,14 @@ impl XNode for Texture {
         };
         finish(res, it)
     }
+}
+
+fn on_color_as_texture<'a, E>(
+    opt: &'a Option<ColorParam>,
+    f: &mut impl FnMut(&'a Texture) -> Result<(), E>,
+) -> Result<(), E> {
+    if let Some(ColorParam::Texture(tex)) = opt {
+        f(tex)?
+    }
+    Ok(())
 }

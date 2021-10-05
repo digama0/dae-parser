@@ -56,6 +56,12 @@ impl<T: ParseLibrary> XNode for Library<T> {
     }
 }
 
+impl<T: CollectLocalMaps> CollectLocalMaps for Library<T> {
+    fn collect_local_maps<'a>(&'a self, maps: &mut LocalMaps<'a>) {
+        self.items.collect_local_maps(maps)
+    }
+}
+
 macro_rules! mk_libraries {
     (@mkdoc $($doc:expr, $name:ident, $arg:ident,)*) => {
         /// A library element, which can be a module of any of the kinds supported by COLLADA.
@@ -64,16 +70,26 @@ macro_rules! mk_libraries {
             $(#[doc = $doc] $name(Library<$arg>),)*
         }
     };
-    ($($(#[derive(Traversable $($mark:literal)?)])? $name:ident($arg:ident) = $s:literal,)*) => {
+    ($($(#[derive(Traversable $(, CollectLocalMaps $($mark:literal)?)?)])?
+        $name:ident($arg:ident) = $s:literal,
+    )*) => {
         $(
-            $(impl Traversable $($mark)? for $arg {
-                fn traverse<'a, E>(
-                    doc: &'a Document,
-                    f: impl FnMut(&'a $arg) -> Result<(), E>,
-                ) -> Result<(), E> {
-                    doc.iter().try_for_each(f)
+            $(
+                impl Traversable for $arg {
+                    fn traverse<'a, E>(
+                        doc: &'a Document,
+                        f: impl FnMut(&'a $arg) -> Result<(), E>,
+                    ) -> Result<(), E> {
+                        doc.iter().try_for_each(f)
+                    }
                 }
-            })?
+
+                $(impl CollectLocalMaps $($mark)? for $arg {
+                    fn collect_local_maps<'a>(&'a self, maps: &mut LocalMaps<'a>) {
+                        maps.insert(self)
+                    }
+                })?
+            )?
 
             impl ParseLibrary for $arg {
                 const LIBRARY: &'static str = $s;
@@ -104,25 +120,60 @@ macro_rules! mk_libraries {
                 }))
             }
         }
+
+        impl CollectLocalMaps for LibraryElement {
+            fn collect_local_maps<'a>(&'a self, maps: &mut LocalMaps<'a>) {
+                match self {
+                    $(Self::$name(lib) => lib.collect_local_maps(maps),)*
+                }
+            }
+        }
     }
 }
 
 mk_libraries! {
     Animations(Animation) = "library_animations",
-    #[derive(Traversable)] AnimationClips(AnimationClip) = "library_animation_clips",
-    #[derive(Traversable)] Cameras(Camera) = "library_cameras",
-    #[derive(Traversable)] Controllers(Controller) = "library_controllers",
-    #[derive(Traversable)] Effects(Effect) = "library_effects",
-    #[derive(Traversable)] ForceFields(ForceField) = "library_force_fields",
-    #[derive(Traversable)] Geometries(Geometry) = "library_geometries",
-    #[derive(Traversable)] Images(Image) = "library_images",
-    #[derive(Traversable)] Lights(Light) = "library_lights",
-    #[derive(Traversable)] Materials(Material) = "library_materials",
+
+    #[derive(Traversable, CollectLocalMaps)]
+    AnimationClips(AnimationClip) = "library_animation_clips",
+
+    #[derive(Traversable, CollectLocalMaps)]
+    Cameras(Camera) = "library_cameras",
+
+    #[derive(Traversable, CollectLocalMaps)]
+    Controllers(Controller) = "library_controllers",
+
+    #[derive(Traversable, CollectLocalMaps)]
+    Effects(Effect) = "library_effects",
+
+    #[derive(Traversable, CollectLocalMaps)]
+    ForceFields(ForceField) = "library_force_fields",
+
+    #[derive(Traversable, CollectLocalMaps)]
+    Geometries(Geometry) = "library_geometries",
+
+    #[derive(Traversable, CollectLocalMaps)]
+    Images(Image) = "library_images",
+
+    #[derive(Traversable, CollectLocalMaps)]
+    Lights(Light) = "library_lights",
+
+    #[derive(Traversable, CollectLocalMaps)]
+    Materials(Material) = "library_materials",
+
     Nodes(Node) = "library_nodes",
-    #[derive(Traversable)] PhysicsMaterials(PhysicsMaterial) = "library_physics_materials",
-    #[derive(Traversable)] PhysicsModels(PhysicsModel) = "library_physics_models",
-    #[derive(Traversable)] PhysicsScenes(PhysicsScene) = "library_physics_scenes",
-    #[derive(Traversable)] VisualScenes(VisualScene) = "library_visual_scenes",
+
+    #[derive(Traversable, CollectLocalMaps)]
+    PhysicsMaterials(PhysicsMaterial) = "library_physics_materials",
+
+    #[derive(Traversable, CollectLocalMaps)]
+    PhysicsModels(PhysicsModel) = "library_physics_models",
+
+    #[derive(Traversable, CollectLocalMaps)]
+    PhysicsScenes(PhysicsScene) = "library_physics_scenes",
+
+    #[derive(Traversable, CollectLocalMaps)]
+    VisualScenes(VisualScene) = "library_visual_scenes",
 }
 
 /// Instantiates a COLLADA material resource,
@@ -181,6 +232,15 @@ impl<T: Instantiate> XNode for Instance<T> {
     }
 }
 
+impl<T: Instantiate> CollectLocalMaps for Instance<T>
+where
+    T::Data: CollectLocalMaps,
+{
+    fn collect_local_maps<'a>(&'a self, maps: &mut LocalMaps<'a>) {
+        self.data.collect_local_maps(maps);
+    }
+}
+
 /// Either an instance of a `T`, or a directly inlined `T` object.
 pub enum DefInstance<T: Instantiate> {
     /// A definition of a `T`.
@@ -222,6 +282,14 @@ impl<T: Instantiate + XNode> DefInstance<T> {
         } else {
             None
         })
+    }
+}
+
+impl<T: Instantiate + CollectLocalMaps> CollectLocalMaps for DefInstance<T> {
+    fn collect_local_maps<'a>(&'a self, maps: &mut LocalMaps<'a>) {
+        if let DefInstance::Def(t) = self {
+            t.collect_local_maps(maps);
+        }
     }
 }
 

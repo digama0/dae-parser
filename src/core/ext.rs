@@ -19,12 +19,6 @@ pub struct Extra {
     pub technique: Vec<Technique>,
 }
 
-impl HasId for Extra {
-    fn id(&self) -> Option<&str> {
-        self.id.as_deref()
-    }
-}
-
 impl XNode for Extra {
     const NAME: &'static str = "extra";
     fn parse(element: &Element) -> Result<Self> {

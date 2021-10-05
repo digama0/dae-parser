@@ -421,3 +421,9 @@ impl XNode for Document {
         })
     }
 }
+
+impl CollectLocalMaps for Document {
+    fn collect_local_maps<'a>(&'a self, maps: &mut LocalMaps<'a>) {
+        self.library.collect_local_maps(maps);
+    }
+}

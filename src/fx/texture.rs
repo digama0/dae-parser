@@ -31,12 +31,6 @@ pub struct Image {
     pub extra: Vec<Extra>,
 }
 
-impl HasId for Image {
-    fn id(&self) -> Option<&str> {
-        self.id.as_deref()
-    }
-}
-
 impl XNode for Image {
     const NAME: &'static str = "image";
     fn parse(element: &Element) -> Result<Self> {
@@ -127,7 +121,7 @@ pub struct Sampler2D {
     /// A name, which is the `sid` of a [`Surface`].
     /// A `Sampler*` is a definition of how a shader will resolve a
     /// color out of a [`Surface`]. `source` identifies the [`Surface`] to read.
-    pub source: String,
+    pub source: NameRef<Surface>,
     /// Wrap mode in the first texture coordinate.
     pub wrap_s: WrapMode,
     /// Wrap mode in the second texture coordinate.
@@ -165,7 +159,7 @@ impl XNode for Sampler2D {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
         Ok(Sampler2D {
-            source: parse_one("source", &mut it, parse_text)?,
+            source: parse_one("source", &mut it, parse_elem)?,
             wrap_s: parse_opt("wrap_s", &mut it, parse_elem)?.unwrap_or_default(),
             wrap_t: parse_opt("wrap_t", &mut it, parse_elem)?.unwrap_or_default(),
             min_filter: parse_opt("minfilter", &mut it, parse_elem)?.unwrap_or_default(),
@@ -377,7 +371,7 @@ impl XNode for FormatHint {
 
 /// A [`Surface`] initialization option, which specifies
 /// whether to initialize the surface and how to do so.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub enum SurfaceInit {
     /// This surface is intended to be initialized later externally by a [`EffectSetParam`] element.
     /// If it is used before being initialized, there is profile- and platform-specific behavior.
@@ -399,16 +393,6 @@ pub enum SurfaceInit {
     /// initialized, the surface is invalid and will result in profile- and platform-specific
     /// behavior unless [`mipmap_generate`](Surface::mipmap_generate) is responsible for
     /// initializing the remaining subsurfaces.
-    /// All attributes are optional:
-    /// • mip: An xs:unsignedInt that specifies the MIP level. The default is 0.
-    /// • slice: An xs:unsignedInt that specifies which 2D layer within a
-    /// volume to initialize. There are anywhere from 0 to n slices in a volume,
-    /// where n is the volume’s depth slice. This attribute is used in combination
-    /// with mip because a volume might have MIPmaps The default is 0.
-    /// • face: An enumerated value of type fx_surface_face_enum that
-    /// specifies which surface of a cube to initialize from the specified image.
-    /// This attribute is used in combination with mip because a cubemap might
-    /// have MIPmaps. The default is POSITIVE_
     From {
         /// The MIP level.
         mip: u32,
@@ -421,6 +405,9 @@ pub enum SurfaceInit {
         /// This attribute is used in combination with `mip` because a cubemap might
         /// have MIPmaps.
         face: SurfaceFace,
+        /// Each subsurface is initialized by a common 1-D or 2-D
+        /// image, not a complex compound image such as DDS.
+        image: NameRef<Image>,
     },
 }
 
@@ -435,6 +422,7 @@ impl SurfaceInit {
                 mip: parse_attr(element.attr("mip"))?.unwrap_or(0),
                 slice: parse_attr(element.attr("slice"))?.unwrap_or(0),
                 face: parse_attr(element.attr("face"))?.unwrap_or_default(),
+                image: parse_elem(element)?,
             },
             _ => return Ok(None),
         }))

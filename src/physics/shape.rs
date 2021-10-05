@@ -39,6 +39,12 @@ impl XNode for Shape {
     }
 }
 
+impl CollectLocalMaps for Shape {
+    fn collect_local_maps<'a>(&'a self, maps: &mut LocalMaps<'a>) {
+        self.physics_material.collect_local_maps(maps);
+    }
+}
+
 /// The geometry of a shape. This can be either an inline definition
 /// using [`Plane`], [`Sphere`] etc, or a [`Instance<Geometry>`],
 /// which can reference other geometry types.

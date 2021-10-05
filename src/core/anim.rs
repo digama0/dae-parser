@@ -22,12 +22,6 @@ pub struct Animation {
     pub extra: Vec<Extra>,
 }
 
-impl HasId for Animation {
-    fn id(&self) -> Option<&str> {
-        self.id.as_deref()
-    }
-}
-
 impl XNode for Animation {
     const NAME: &'static str = "animation";
     fn parse(element: &Element) -> Result<Self> {
@@ -53,6 +47,38 @@ impl XNode for Animation {
     }
 }
 
+impl CollectLocalMaps for Animation {
+    fn collect_local_maps<'a>(&'a self, maps: &mut LocalMaps<'a>) {
+        maps.insert(self);
+        self.children.collect_local_maps(maps);
+        self.source.collect_local_maps(maps);
+        self.sampler.collect_local_maps(maps);
+    }
+}
+
+impl Animation {
+    fn on_children<'a, E>(
+        &'a self,
+        f: &mut impl FnMut(&'a Self) -> Result<(), E>,
+    ) -> Result<(), E> {
+        f(self)?;
+        for child in &self.children {
+            child.on_children(f)?
+        }
+        Ok(())
+    }
+}
+
+impl Traversable for Animation {
+    fn traverse<'a, E>(
+        doc: &'a Document,
+        mut f: impl FnMut(&'a Animation) -> Result<(), E>,
+    ) -> Result<(), E> {
+        doc.iter()
+            .try_for_each(|e: &Animation| e.on_children(&mut f))
+    }
+}
+
 /// Defines a section of a set of animation curves to be used together as an animation clip.
 #[derive(Clone, Debug)]
 pub struct AnimationClip {
@@ -74,12 +100,6 @@ pub struct AnimationClip {
     pub instance_animation: Vec<Instance<Animation>>,
     /// Provides arbitrary additional information about this element.
     pub extra: Vec<Extra>,
-}
-
-impl HasId for AnimationClip {
-    fn id(&self) -> Option<&str> {
-        self.id.as_deref()
-    }
 }
 
 impl XNode for AnimationClip {
@@ -131,12 +151,6 @@ pub struct Sampler {
     pub interpolation: usize,
 }
 
-impl HasId for Sampler {
-    fn id(&self) -> Option<&str> {
-        self.id.as_deref()
-    }
-}
-
 impl XNode for Sampler {
     const NAME: &'static str = "sampler";
     fn parse(element: &Element) -> Result<Self> {
@@ -152,6 +166,25 @@ impl XNode for Sampler {
             inputs,
         };
         finish(res, it)
+    }
+}
+
+impl CollectLocalMaps for Sampler {
+    fn collect_local_maps<'a>(&'a self, maps: &mut LocalMaps<'a>) {
+        maps.insert(self)
+    }
+}
+
+impl Traversable for Sampler {
+    fn traverse<'a, E>(
+        doc: &'a Document,
+        mut f: impl FnMut(&'a Self) -> Result<(), E>,
+    ) -> Result<(), E>
+    where
+        Self: 'a,
+    {
+        doc.iter()
+            .try_for_each(|lib: &Animation| lib.sampler.iter().try_for_each(&mut f))
     }
 }
 

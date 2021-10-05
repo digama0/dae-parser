@@ -22,12 +22,6 @@ pub struct Effect {
     pub extra: Vec<Extra>,
 }
 
-impl HasId for Effect {
-    fn id(&self) -> Option<&str> {
-        Some(&self.id)
-    }
-}
-
 impl XNode for Effect {
     const NAME: &'static str = "effect";
     fn parse(element: &Element) -> Result<Self> {
@@ -47,6 +41,23 @@ impl XNode for Effect {
             return Err("expected at least one profile".into());
         }
         Ok(res)
+    }
+}
+
+impl Effect {
+    /// Get the first [`ProfileCommon`] in this effect.
+    pub fn get_common_profile(&self) -> Option<&ProfileCommon> {
+        self.profile.iter().find_map(Profile::as_common)
+    }
+
+    /// Get a parameter of the effect by name.
+    pub fn get_param(&self, sid: &str) -> Option<&NewParam> {
+        for p in self.new_param.iter().rev() {
+            if p.sid == sid {
+                return Some(p);
+            }
+        }
+        None
     }
 }
 
@@ -120,12 +131,6 @@ pub struct TechniqueFx<T> {
     pub data: T,
     /// Provides arbitrary additional information about this element.
     pub extra: Vec<Extra>,
-}
-
-impl<T> HasId for TechniqueFx<T> {
-    fn id(&self) -> Option<&str> {
-        self.id.as_deref()
-    }
 }
 
 impl<T: ProfileData> XNode for TechniqueFx<T> {

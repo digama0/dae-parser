@@ -22,12 +22,6 @@ pub struct PhysicsModel {
     pub extra: Vec<Extra>,
 }
 
-impl HasId for PhysicsModel {
-    fn id(&self) -> Option<&str> {
-        self.id.as_deref()
-    }
-}
-
 impl XNode for PhysicsModel {
     const NAME: &'static str = "physics_model";
     fn parse(element: &Element) -> Result<Self> {
@@ -79,6 +73,12 @@ impl Instantiate for PhysicsModel {
     }
 }
 
+impl CollectLocalMaps for InstancePhysicsModelData {
+    fn collect_local_maps<'a>(&'a self, maps: &mut LocalMaps<'a>) {
+        self.instance_rigid_body.collect_local_maps(maps);
+    }
+}
+
 /// Describes simulated bodies that do not deform.
 ///
 /// These bodies may or may not be connected by constraints (hinge, ball-joint, and so on).
@@ -125,6 +125,12 @@ impl XNode for RigidBody {
     }
 }
 
+impl CollectLocalMaps for RigidBody {
+    fn collect_local_maps<'a>(&'a self, maps: &mut LocalMaps<'a>) {
+        self.common.collect_local_maps(maps);
+    }
+}
+
 /// Specifies rigid-body information for the common profile
 /// that every COLLADA implmentation must support.
 #[derive(Clone, Default, Debug)]
@@ -164,6 +170,13 @@ impl RigidBodyCommon {
             shape: Shape::parse_list(&mut it)?,
         };
         finish(res, it)
+    }
+}
+
+impl CollectLocalMaps for RigidBodyCommon {
+    fn collect_local_maps<'a>(&'a self, maps: &mut LocalMaps<'a>) {
+        self.physics_material.collect_local_maps(maps);
+        self.shape.collect_local_maps(maps);
     }
 }
 
@@ -207,6 +220,12 @@ impl XNode for InstanceRigidBody {
     }
 }
 
+impl CollectLocalMaps for InstanceRigidBody {
+    fn collect_local_maps<'a>(&'a self, maps: &mut LocalMaps<'a>) {
+        self.common.collect_local_maps(maps);
+    }
+}
+
 /// Specifies the rigid-body information for the common
 /// profile that all COLLADA implementations must support.
 #[derive(Clone, Default, Debug)]
@@ -243,6 +262,12 @@ impl InstanceRigidBodyCommon {
             velocity: parse_opt("velocity", &mut it, parse_array_n)?.map_or([0.; 3], |a| *a),
             common: RigidBodyCommon::parse(it)?,
         })
+    }
+}
+
+impl CollectLocalMaps for InstanceRigidBodyCommon {
+    fn collect_local_maps<'a>(&'a self, maps: &mut LocalMaps<'a>) {
+        self.common.collect_local_maps(maps);
     }
 }
 

@@ -15,12 +15,6 @@ pub struct Controller {
     pub extra: Vec<Extra>,
 }
 
-impl HasId for Controller {
-    fn id(&self) -> Option<&str> {
-        self.id.as_deref()
-    }
-}
-
 impl XNode for Controller {
     const NAME: &'static str = "controller";
     fn parse(element: &Element) -> Result<Self> {

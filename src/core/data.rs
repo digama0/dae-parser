@@ -11,7 +11,7 @@ pub struct Accessor {
     /// This element may refer to a COLLADA array element or to an
     /// array data source outside the scope of the document;
     /// the source does not need to be a COLLADA document.
-    pub source: UrlRef<ArrayElement>,
+    pub source: Url,
     /// The number of values that are to be considered a unit during each access to the array.
     /// The default is 1, indicating that a single value is accessed.
     pub stride: usize,
@@ -53,33 +53,77 @@ fn parse_array_count<T: FromStr>(e: &Element) -> Result<Box<[T]>> {
     Ok(vec.into())
 }
 
-/// A data array element.
-#[derive(Clone, Debug)]
-pub enum ArrayElement {
-    /// Stores a homogenous array of ID reference values.
-    IdRef(Box<[String]>),
-    /// Stores a homogenous array of symbolic name values.
-    Name(Box<[String]>),
-    /// Stores a homogenous array of Boolean values.
-    Bool(Box<[bool]>),
-    /// Stores a homogenous array of floating-point values.
-    Float(Box<[f32]>),
-    /// Stores a homogenous array of integer values.
-    Int(Box<[u32]>),
+macro_rules! mk_arrays {
+    ($($(#[$doc:meta])* $name:ident($tyname:ident($ty:ty)) = $s:literal,)*) => {
+        $(
+            $(#[$doc])*
+            #[derive(Clone, Debug)]
+            pub struct $tyname {
+                /// A text string containing the unique identifier of the element.
+                pub id: Option<String>,
+                /// The stored array of values.
+                pub val: $ty,
+            }
+            impl Deref for $tyname {
+                type Target = $ty;
+
+                fn deref(&self) -> &Self::Target {
+                    &self.val
+                }
+            }
+            impl XNode for $tyname {
+                const NAME: &'static str = $s;
+                fn parse(element: &Element) -> Result<Self> {
+                    debug_assert_eq!(element.name(), Self::NAME);
+                    Ok(Self {
+                        id: element.attr("id").map(Into::into),
+                        val: parse_array_count(element)?,
+                    })
+                }
+            }
+            impl CollectLocalMaps for $tyname {
+                fn collect_local_maps<'a>(&'a self, maps: &mut LocalMaps<'a>) {
+                    maps.insert(self)
+                }
+            }
+        )*
+
+        /// A data array element.
+        #[derive(Clone, Debug)]
+        pub enum ArrayElement {
+            $($(#[$doc])* $name($tyname),)*
+        }
+
+        impl ArrayElement {
+            /// Parse an [`ArrayElement`] from an XML element.
+            pub fn parse(e: &Element) -> Result<Option<Self>> {
+                Ok(Some(match e.name() {
+                    $($tyname::NAME => Self::$name($tyname::parse(e)?),)*
+                    _ => return Ok(None),
+                }))
+            }
+        }
+        impl CollectLocalMaps for ArrayElement {
+            fn collect_local_maps<'a>(&'a self, maps: &mut LocalMaps<'a>) {
+                match self {
+                    $(Self::$name(arr) => arr.collect_local_maps(maps),)*
+                }
+            }
+        }
+    }
 }
 
-impl ArrayElement {
-    /// Parse an [`ArrayElement`] from an XML element.
-    pub fn parse(e: &Element) -> Result<Option<Self>> {
-        Ok(Some(match e.name() {
-            "IDREF_array" => Self::IdRef(parse_array_count(e)?),
-            "Name_array" => Self::Name(parse_array_count(e)?),
-            "bool_array" => Self::Bool(parse_array_count(e)?),
-            "float_array" => Self::Float(parse_array_count(e)?),
-            "int_array" => Self::Int(parse_array_count(e)?),
-            _ => return Ok(None),
-        }))
-    }
+mk_arrays! {
+    /// Stores a homogenous array of ID reference values.
+    IdRef(IdRefArray(Box<[String]>)) = "IDREF_array",
+    /// Stores a homogenous array of symbolic name values.
+    Name(NameArray(Box<[String]>)) = "Name_array",
+    /// Stores a homogenous array of Boolean values.
+    Bool(BoolArray(Box<[bool]>)) = "bool_array",
+    /// Stores a homogenous array of floating-point values.
+    Float(FloatArray(Box<[f32]>)) = "float_array",
+    /// Stores a homogenous array of integer values.
+    Int(IntArray(Box<[u32]>)) = "int_array",
 }
 
 /// Declares parametric information for its parent element.
@@ -127,12 +171,6 @@ pub struct Source {
     pub technique: Vec<Technique>,
 }
 
-impl HasId for Source {
-    fn id(&self) -> Option<&str> {
-        self.id.as_deref()
-    }
-}
-
 impl XNode for Source {
     const NAME: &'static str = "source";
     fn parse(element: &Element) -> Result<Self> {
@@ -150,6 +188,39 @@ impl XNode for Source {
             technique: Technique::parse_list(&mut it)?,
         };
         finish(res, it)
+    }
+}
+
+impl CollectLocalMaps for Source {
+    fn collect_local_maps<'a>(&'a self, maps: &mut LocalMaps<'a>) {
+        maps.insert(self);
+        self.array.collect_local_maps(maps);
+    }
+}
+
+impl Traversable for Source {
+    fn traverse<'a, E>(
+        doc: &'a Document,
+        mut f: impl FnMut(&'a Self) -> Result<(), E>,
+    ) -> Result<(), E>
+    where
+        Self: 'a,
+    {
+        doc.library.iter().try_for_each(|elem| match elem {
+            LibraryElement::Animations(lib) => lib
+                .items
+                .iter()
+                .try_for_each(|anim| anim.source.iter().try_for_each(&mut f)),
+            LibraryElement::Controllers(lib) => lib
+                .items
+                .iter()
+                .try_for_each(|con| con.element.sources().iter().try_for_each(&mut f)),
+            LibraryElement::Geometries(lib) => lib
+                .items
+                .iter()
+                .try_for_each(|geom| geom.element.sources().iter().try_for_each(&mut f)),
+            _ => Ok(()),
+        })
     }
 }
 
@@ -174,6 +245,24 @@ impl XNode for Input {
             semantic: parse_attr(element.attr("semantic"))?.ok_or("missing semantic attr")?,
             source: parse_attr(element.attr("source"))?.ok_or("missing source attr")?,
         })
+    }
+}
+
+impl Input {
+    /// Typecast `self.source` as a `UrlRef<Source>`.
+    /// The `semantic` is checked in debug mode to ensure that it is compatible with a
+    /// [`Source`] target.
+    pub fn source_as_source(&self) -> &UrlRef<Source> {
+        debug_assert!(!matches!(self.semantic, Semantic::Vertex));
+        ref_cast::RefCast::ref_cast(&self.source)
+    }
+
+    /// Typecast `self.source` as a `UrlRef<Vertices>`.
+    /// The `semantic` is checked in debug mode to ensure that it is compatible with a
+    /// [`Vertices`] target.
+    pub fn source_as_vertices(&self) -> &UrlRef<Vertices> {
+        debug_assert!(matches!(self.semantic, Semantic::Vertex));
+        ref_cast::RefCast::ref_cast(&self.source)
     }
 }
 

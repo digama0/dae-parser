@@ -48,12 +48,6 @@ pub struct VisualScene {
     pub extra: Vec<Extra>,
 }
 
-impl HasId for VisualScene {
-    fn id(&self) -> Option<&str> {
-        self.id.as_deref()
-    }
-}
-
 impl XNode for VisualScene {
     const NAME: &'static str = "visual_scene";
     fn parse(element: &Element) -> Result<Self> {
@@ -101,12 +95,6 @@ pub struct Node {
     pub extra: Vec<Extra>,
 }
 
-impl HasId for Node {
-    fn id(&self) -> Option<&str> {
-        self.id.as_deref()
-    }
-}
-
 impl XNode for Node {
     const NAME: &'static str = "node";
     fn parse(element: &Element) -> Result<Self> {
@@ -124,6 +112,42 @@ impl XNode for Node {
             instance_node: Instance::parse_list(&mut it)?,
             children: Node::parse_list(&mut it)?,
             extra: Extra::parse_many(it)?,
+        })
+    }
+}
+
+impl CollectLocalMaps for Node {
+    fn collect_local_maps<'a>(&'a self, maps: &mut LocalMaps<'a>) {
+        maps.insert(self);
+        self.children.collect_local_maps(maps);
+    }
+}
+
+impl Node {
+    fn on_children<'a, E>(
+        &'a self,
+        f: &mut impl FnMut(&'a Self) -> Result<(), E>,
+    ) -> Result<(), E> {
+        f(self)?;
+        for child in &self.children {
+            child.on_children(f)?
+        }
+        Ok(())
+    }
+}
+
+impl Traversable for Node {
+    fn traverse<'a, E>(
+        doc: &'a Document,
+        mut f: impl FnMut(&'a Node) -> Result<(), E>,
+    ) -> Result<(), E> {
+        doc.library.iter().try_for_each(|elem| match elem {
+            LibraryElement::Nodes(lib) => lib.items.iter().try_for_each(|e| e.on_children(&mut f)),
+            LibraryElement::VisualScenes(lib) => lib
+                .items
+                .iter()
+                .try_for_each(|e| e.nodes.iter().try_for_each(|e| e.on_children(&mut f))),
+            _ => Ok(()),
         })
     }
 }

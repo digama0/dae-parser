@@ -28,6 +28,14 @@ impl Profile {
             _ => return Ok(None),
         }))
     }
+
+    /// Variant extractor for [`ProfileCommon`].
+    pub fn as_common(&self) -> Option<&ProfileCommon> {
+        match self {
+            Profile::Common(p) => Some(p),
+            _ => None,
+        }
+    }
 }
 
 /// Opens a block of platform-independent declarations for the common, fixed-function shader.
@@ -71,6 +79,26 @@ impl XNode for ProfileCommon {
     }
 }
 
+impl ProfileCommon {
+    /// Get a parameter by name, looking in the parameters to the technique,
+    /// the parameters to the profile, and finally the parameters to the parent effect.
+    pub fn get_param<'a>(&'a self, parent: &'a Effect, sid: &str) -> Option<&'a NewParam> {
+        for p in self.technique.data.image_param.iter().rev() {
+            if let ImageParam::NewParam(p) = p {
+                if p.sid == sid {
+                    return Some(p);
+                }
+            }
+        }
+        for p in self.new_param.iter().rev() {
+            if p.sid == sid {
+                return Some(p);
+            }
+        }
+        parent.get_param(sid)
+    }
+}
+
 /// The extra data in a [`TechniqueFx`] as the child of [`ProfileCommon`].
 #[derive(Clone, Default, Debug)]
 pub struct CommonData {
@@ -86,6 +114,19 @@ impl ProfileData for CommonData {
             image_param: ImageParam::parse_list(it)?,
             shaders: parse_list_many(it, Shader::parse)?,
         })
+    }
+}
+
+impl CommonData {
+    /// Run the function `f` on all arguments of type [`Texture`] in the profile.
+    pub fn on_textures<'a, E>(
+        &'a self,
+        mut f: impl FnMut(&'a Texture) -> Result<(), E>,
+    ) -> Result<(), E> {
+        for s in &self.shaders {
+            s.on_textures(&mut f)?
+        }
+        Ok(())
     }
 }
 

@@ -13,7 +13,7 @@ const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ').add(b'"').add(b'<').add(b'>').ad
 /// and we don't have a base URL to work from since the parser does not do URL resolution.
 /// So we parse fragments and leave everything else to be parsed by a proper URL crate
 /// during resolution.
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum Url {
     /// A fragment `#foo`. The string is the percent-decoded payload `"foo"`.
     Fragment(String),
