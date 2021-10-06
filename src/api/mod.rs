@@ -1,10 +1,13 @@
-mod local_map;
+pub mod geom;
+pub mod local_map;
+pub mod source;
 
 use ref_cast::RefCast;
 use std::{collections::HashMap, marker::PhantomData, ops::Index};
 
 use super::*;
-pub use local_map::*;
+pub(crate) use local_map::{CollectLocalMaps, HasId, Traversable};
+pub use local_map::{LocalMap, LocalMaps};
 
 /// A wrapper around a base type `A` to indicate that the value is pointing to
 /// a value of type `T`.

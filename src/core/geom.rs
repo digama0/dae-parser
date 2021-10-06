@@ -244,7 +244,7 @@ pub struct Geom<T> {
     pub count: usize,
     /// The vertex attribute access information.
     pub inputs: InputList,
-    /// The specific data for
+    /// The specific data for the geometry element.
     pub data: T,
     /// Provides arbitrary additional information about this element.
     pub extra: Vec<Extra>,

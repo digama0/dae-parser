@@ -53,8 +53,16 @@ fn parse_array_count<T: FromStr>(e: &Element) -> Result<Box<[T]>> {
     Ok(vec.into())
 }
 
+/// A trait for the common functionality of the array types.
+pub trait ArrayKind: HasId + XNode + Deref<Target = [Self::Elem]> + 'static {
+    /// The stored element type.
+    type Elem: Clone + Debug + 'static;
+    /// Extract a typed array from an [`ArrayElement`].
+    fn from_array_element(elem: &ArrayElement) -> Option<&Self>;
+}
+
 macro_rules! mk_arrays {
-    ($($(#[$doc:meta])* $name:ident($tyname:ident($ty:ty)) = $s:literal,)*) => {
+    ($($(#[$doc:meta])* $name:ident($tyname:ident[$ty:ty]) = $s:literal,)*) => {
         $(
             $(#[$doc])*
             #[derive(Clone, Debug)]
@@ -62,10 +70,10 @@ macro_rules! mk_arrays {
                 /// A text string containing the unique identifier of the element.
                 pub id: Option<String>,
                 /// The stored array of values.
-                pub val: $ty,
+                pub val: Box<[$ty]>,
             }
             impl Deref for $tyname {
-                type Target = $ty;
+                type Target = [$ty];
 
                 fn deref(&self) -> &Self::Target {
                     &self.val
@@ -86,12 +94,29 @@ macro_rules! mk_arrays {
                     maps.insert(self)
                 }
             }
+            impl ArrayKind for $tyname {
+                type Elem = $ty;
+                fn from_array_element(elem: &ArrayElement) -> Option<&Self> {
+                    match elem {
+                        ArrayElement::$name(arr) => Some(arr),
+                        _ => None,
+                    }
+                }
+            }
         )*
 
         /// A data array element.
         #[derive(Clone, Debug)]
         pub enum ArrayElement {
             $($(#[$doc])* $name($tyname),)*
+        }
+
+        impl CollectLocalMaps for ArrayElement {
+            fn collect_local_maps<'a>(&'a self, maps: &mut LocalMaps<'a>) {
+                match self {
+                    $(Self::$name(arr) => arr.collect_local_maps(maps),)*
+                }
+            }
         }
 
         impl ArrayElement {
@@ -102,12 +127,24 @@ macro_rules! mk_arrays {
                     _ => return Ok(None),
                 }))
             }
-        }
-        impl CollectLocalMaps for ArrayElement {
-            fn collect_local_maps<'a>(&'a self, maps: &mut LocalMaps<'a>) {
+
+            /// Get the ID of this element.
+            pub fn id(&self) -> Option<&str> {
                 match self {
-                    $(Self::$name(arr) => arr.collect_local_maps(maps),)*
+                    $(ArrayElement::$name(arr) => arr.id.as_deref(),)*
                 }
+            }
+
+            /// Get the number of values in this array.
+            pub fn len(&self) -> usize {
+                match self {
+                    $(ArrayElement::$name(arr) => arr.len(),)*
+                }
+            }
+
+            /// Returns true if the array is empty.
+            pub fn is_empty(&self) -> bool {
+                self.len() == 0
             }
         }
     }
@@ -115,15 +152,15 @@ macro_rules! mk_arrays {
 
 mk_arrays! {
     /// Stores a homogenous array of ID reference values.
-    IdRef(IdRefArray(Box<[String]>)) = "IDREF_array",
+    IdRef(IdRefArray[String]) = "IDREF_array",
     /// Stores a homogenous array of symbolic name values.
-    Name(NameArray(Box<[String]>)) = "Name_array",
+    Name(NameArray[String]) = "Name_array",
     /// Stores a homogenous array of Boolean values.
-    Bool(BoolArray(Box<[bool]>)) = "bool_array",
+    Bool(BoolArray[bool]) = "bool_array",
     /// Stores a homogenous array of floating-point values.
-    Float(FloatArray(Box<[f32]>)) = "float_array",
+    Float(FloatArray[f32]) = "float_array",
     /// Stores a homogenous array of integer values.
-    Int(IntArray(Box<[u32]>)) = "int_array",
+    Int(IntArray[u32]) = "int_array",
 }
 
 /// Declares parametric information for its parent element.
@@ -187,6 +224,11 @@ impl XNode for Source {
             })?,
             technique: Technique::parse_list(&mut it)?,
         };
+        if let Some(arr) = &res.array {
+            if arr.len() < res.accessor.offset + res.accessor.stride * res.accessor.count {
+                return Err("array is too short for accessor".into());
+            }
+        }
         finish(res, it)
     }
 }

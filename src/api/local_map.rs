@@ -1,3 +1,5 @@
+//! Contains the [`LocalMap`] and [`LocalMaps`] types, used to resolve internal ID references.
+
 use super::*;
 
 impl Document {
