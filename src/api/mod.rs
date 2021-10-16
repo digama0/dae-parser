@@ -23,6 +23,12 @@ pub struct Ref<A, T: ?Sized> {
     _marker: PhantomData<T>,
 }
 
+impl<A: Display, T: ?Sized> Display for Ref<A, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.val.fmt(f)
+    }
+}
+
 impl<A: Debug, T: ?Sized> Debug for Ref<A, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.val.fmt(f)

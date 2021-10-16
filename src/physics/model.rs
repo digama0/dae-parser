@@ -39,6 +39,21 @@ impl XNode for PhysicsModel {
     }
 }
 
+impl XNodeWrite for PhysicsModel {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.opt_attr("id", &self.id);
+        e.opt_attr("name", &self.name);
+        let e = e.start(w)?;
+        self.asset.write_to(w)?;
+        self.rigid_body.write_to(w)?;
+        self.rigid_constraint.write_to(w)?;
+        self.instances.write_to(w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
+    }
+}
+
 /// Extra data associated to [`Instance`]<[`PhysicsModel`]>.
 #[derive(Clone, Debug)]
 pub struct InstancePhysicsModelData {
@@ -60,6 +75,14 @@ pub struct InstancePhysicsModelData {
     pub instance_rigid_constraint: Vec<InstanceRigidConstraint>,
 }
 
+impl XNodeWrite for InstancePhysicsModelData {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        self.instance_force_field.write_to(w)?;
+        self.instance_rigid_body.write_to(w)?;
+        self.instance_rigid_constraint.write_to(w)
+    }
+}
+
 impl Instantiate for PhysicsModel {
     const INSTANCE: &'static str = "instance_physics_model";
     type Data = InstancePhysicsModelData;
@@ -70,6 +93,16 @@ impl Instantiate for PhysicsModel {
             instance_rigid_body: InstanceRigidBody::parse_list(it)?,
             instance_rigid_constraint: InstanceRigidConstraint::parse_list(it)?,
         })
+    }
+
+    fn is_empty(data: &Self::Data) -> bool {
+        data.instance_force_field.is_empty()
+            && data.instance_rigid_body.is_empty()
+            && data.instance_rigid_constraint.is_empty()
+    }
+
+    fn write_attr(data: &Self::Data, e: &mut ElemBuilder) {
+        e.opt_print_attr("parent", &data.parent)
     }
 }
 
@@ -125,6 +158,21 @@ impl XNode for RigidBody {
     }
 }
 
+impl XNodeWrite for RigidBody {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.opt_attr("sid", &self.sid);
+        e.opt_attr("name", &self.name);
+        let e = e.start(w)?;
+        let common = ElemBuilder::new(Technique::COMMON).start(w)?;
+        self.common.write_to(w)?;
+        common.end(w)?;
+        self.technique.write_to(w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
+    }
+}
+
 impl CollectLocalMaps for RigidBody {
     fn collect_local_maps<'a>(&'a self, maps: &mut LocalMaps<'a>) {
         self.common.collect_local_maps(maps);
@@ -170,6 +218,23 @@ impl RigidBodyCommon {
             shape: Shape::parse_list(&mut it)?,
         };
         finish(res, it)
+    }
+}
+
+impl XNodeWrite for RigidBodyCommon {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        ElemBuilder::opt_print("dynamic", &self.dynamic, w)?;
+        ElemBuilder::opt_print("mass", &self.mass, w)?;
+        if !self.mass_frame.is_empty() {
+            let frame = ElemBuilder::new("mass_frame").start(w)?;
+            self.mass_frame.write_to(w)?;
+            frame.end(w)?
+        }
+        opt(&self.inertia, |e| {
+            ElemBuilder::print_arr("inertia", &**e, w)
+        })?;
+        self.physics_material.write_to(w)?;
+        self.shape.write_to(w)
     }
 }
 
@@ -220,6 +285,21 @@ impl XNode for InstanceRigidBody {
     }
 }
 
+impl XNodeWrite for InstanceRigidBody {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.print_attr("body", &self.body);
+        e.print_attr("target", &self.target);
+        let e = e.start(w)?;
+        let common = ElemBuilder::new(Technique::COMMON).start(w)?;
+        self.common.write_to(w)?;
+        common.end(w)?;
+        self.technique.write_to(w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
+    }
+}
+
 impl CollectLocalMaps for InstanceRigidBody {
     fn collect_local_maps<'a>(&'a self, maps: &mut LocalMaps<'a>) {
         self.common.collect_local_maps(maps);
@@ -262,6 +342,19 @@ impl InstanceRigidBodyCommon {
             velocity: parse_opt("velocity", &mut it, parse_array_n)?.map_or([0.; 3], |a| *a),
             common: RigidBodyCommon::parse(it)?,
         })
+    }
+}
+
+impl XNodeWrite for InstanceRigidBodyCommon {
+    #[allow(clippy::float_cmp)]
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        if self.angular_velocity != [0.; 3] {
+            ElemBuilder::print_arr("angular_velocity", &self.angular_velocity, w)?;
+        }
+        if self.velocity != [0.; 3] {
+            ElemBuilder::print_arr("velocity", &self.velocity, w)?;
+        }
+        self.common.write_to(w)
     }
 }
 
@@ -308,6 +401,24 @@ impl XNode for RigidConstraint {
             technique: Technique::parse_list(&mut it)?,
             extra: Extra::parse_many(it)?,
         })
+    }
+}
+
+impl XNodeWrite for RigidConstraint {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.opt_attr("sid", &self.sid);
+        e.opt_attr("name", &self.name);
+        let e = e.start(w)?;
+        self.ref_attachment
+            .write_inner(ElemBuilder::new(Attachment::REF), w)?;
+        self.attachment.write_to(w)?;
+        let common = ElemBuilder::new(Technique::COMMON).start(w)?;
+        self.common.write_to(w)?;
+        common.end(w)?;
+        self.technique.write_to(w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
     }
 }
 
@@ -364,6 +475,32 @@ impl RigidConstraintCommon {
     }
 }
 
+impl XNodeWrite for RigidConstraintCommon {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        ElemBuilder::def_print("enabled", self.enabled, true, w)?;
+        ElemBuilder::def_print("interpenetrate", self.interpenetrate, false, w)?;
+        macro_rules! write_lim {
+            ($n:expr, $a1:ident: $n1:expr, $a2:ident: $n2:expr) => {
+                let has1 = !self.$a1.is_empty();
+                let has2 = !self.$a2.is_empty();
+                if has1 || has2 {
+                    let e = ElemBuilder::new($n).start(w)?;
+                    if has1 {
+                        self.$a1.write_to($n1, w)?
+                    }
+                    if has2 {
+                        self.$a2.write_to($n2, w)?
+                    }
+                    e.end(w)?
+                }
+            };
+        }
+        write_lim!("limits", swing_cone_and_twist: "swing_cone_and_twist", linear: "linear");
+        write_lim!("spring", spring_angular: "angular", spring_linear: "linear");
+        Ok(())
+    }
+}
+
 /// Instantiates an object described by a [`RigidConstraint`]
 /// within an [`Instance`]<[`PhysicsModel`]>.
 #[derive(Clone, Debug)]
@@ -386,6 +523,16 @@ impl XNode for InstanceRigidConstraint {
     }
 }
 
+impl XNodeWrite for InstanceRigidConstraint {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.print_attr("constraint", &self.constraint);
+        let e = e.start(w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
+    }
+}
+
 /// A set of min/max limits used for both linear and angular constraints.
 #[derive(Clone, Default, Debug)]
 pub struct Limits {
@@ -405,10 +552,22 @@ impl Limits {
         };
         finish(res, it)
     }
+
+    /// Is this [`Limits`] instance set to the default value?
+    pub fn is_empty(&self) -> bool {
+        self.min.is_none() && self.max.is_none()
+    }
+
+    fn write_to<W: Write>(&self, name: &str, w: &mut XWriter<W>) -> Result<()> {
+        let e = ElemBuilder::new(name).start(w)?;
+        opt(&self.min, |e| ElemBuilder::print_arr("min", &**e, w))?;
+        opt(&self.max, |e| ElemBuilder::print_arr("max", &**e, w))?;
+        e.end(w)
+    }
 }
 
 /// A spring constraint, used for both linear and angular constraints.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Spring {
     /// The `stiffness` (also called spring coefficient)
     /// has units of force/distance for `spring_linear`
@@ -440,5 +599,18 @@ impl Spring {
             target_value: parse_opt("target_value", &mut it, parse_elem)?.unwrap_or(0.),
         };
         finish(res, it)
+    }
+
+    /// Is this [`Spring`] instance set to the default value?
+    pub fn is_empty(&self) -> bool {
+        *self == Default::default()
+    }
+
+    fn write_to<W: Write>(&self, name: &str, w: &mut XWriter<W>) -> Result<()> {
+        let e = ElemBuilder::new(name).start(w)?;
+        ElemBuilder::def_print("stiffness", self.stiffness, 1., w)?;
+        ElemBuilder::def_print("damping", self.damping, 0., w)?;
+        ElemBuilder::def_print("target_value", self.target_value, 0., w)?;
+        e.end(w)
     }
 }

@@ -3,9 +3,7 @@
 //! This is a parser for the Collada (`.dae`) format, used for interchange between 3D renderers
 //! and games. Compared to the [`collada`](https://crates.io/crates/collada) crate,
 //! this crate attempts to more directly represent the Collada data model, and it is also
-//! significantly more complete.
-//!
-//! Currently it only supports reading, but writing is a planned addition.
+//! significantly more complete. It supports both reading and writing.
 //!
 //! ## Usage
 //!
@@ -117,23 +115,25 @@ mod url;
 
 use crate::api::*;
 use std::convert::{TryFrom, TryInto};
-use std::fmt::Debug;
-use std::io::{BufRead, BufReader};
+use std::fmt::{Debug, Display};
+use std::io::{BufRead, BufReader, Write};
 use std::ops::Deref;
 use std::path::Path;
 use std::str::FromStr;
 
 pub use crate::{api::*, core::*, fx::*, physics::*};
+use minidom::quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 pub use minidom::Element;
 pub use url::Url;
 
 type XReader<R> = minidom::quick_xml::Reader<R>;
+type XWriter<R> = minidom::quick_xml::Writer<R>;
 
 /// The main error type used by this library.
 #[derive(Debug)]
 pub enum Error {
     /// An error during XML parsing.
-    Parse(minidom::Error),
+    Minidom(minidom::Error),
     /// A generic error given by a string.
     Other(&'static str),
     /// A generic error given by a string.
@@ -142,13 +142,19 @@ pub enum Error {
 
 impl From<std::io::Error> for Error {
     fn from(v: std::io::Error) -> Self {
-        Self::Parse(v.into())
+        Self::Minidom(v.into())
     }
 }
 
 impl From<minidom::Error> for Error {
     fn from(v: minidom::Error) -> Self {
-        Self::Parse(v)
+        Self::Minidom(v)
+    }
+}
+
+impl From<minidom::quick_xml::Error> for Error {
+    fn from(v: minidom::quick_xml::Error) -> Self {
+        Self::Minidom(v.into())
     }
 }
 
@@ -294,53 +300,244 @@ fn parse_list_many<'a, T>(
     Ok(res)
 }
 
-/// A common trait for all data structures that represent an XML element.
-pub trait XNode: Sized {
-    /// The name of the XML element.
-    const NAME: &'static str;
+fn print_str(s: &str, w: &mut XWriter<impl Write>) -> Result<()> {
+    Ok(w.write_event(Event::Text(BytesText::from_plain(s.as_bytes())))?)
+}
 
-    /// Parse an XML element into this type. In most cases, the parser will require with a
-    /// `debug_assert` that the element to parse has name [`Self::NAME`].
-    fn parse(element: &Element) -> Result<Self>;
+fn print_elem<T: Display>(elem: &T, w: &mut XWriter<impl Write>) -> Result<()> {
+    print_str(&format!("{}", elem), w)
+}
 
-    /// Parse an XML element and return the data structure in a `Box`.
-    /// This can be faster in some cases when the data structure is large.
-    fn parse_box(element: &Element) -> Result<Box<Self>> {
-        Self::parse(element).map(Box::new)
+#[inline]
+fn opt<'a, T, E>(elem: &'a Option<T>, f: impl FnOnce(&'a T) -> Result<(), E>) -> Result<(), E> {
+    if let Some(elem) = elem {
+        f(elem)?
+    }
+    Ok(())
+}
+
+#[inline]
+fn many<'a, T, E>(elem: &'a [T], f: impl FnMut(&'a T) -> Result<(), E>) -> Result<(), E> {
+    elem.iter().try_for_each(f)
+}
+
+fn arr_to_string<T: Display>(elem: &[T]) -> Option<String> {
+    let (e1, rest) = elem.split_first()?;
+    let mut s = format!("{}", e1);
+    for e in rest {
+        use std::fmt::Write;
+        write!(s, " {}", e).expect("can't fail")
+    }
+    Some(s)
+}
+fn print_arr<T: Display>(elem: &[T], w: &mut XWriter<impl Write>) -> Result<()> {
+    opt(&arr_to_string(elem), |s| print_str(s, w))
+}
+
+#[doc(hidden)]
+#[derive(Debug)]
+pub struct ElemBuilder<'a>(BytesStart<'a>);
+
+struct ElemEnd<'a>(BytesEnd<'a>);
+
+impl<'a> ElemBuilder<'a> {
+    #[inline]
+    fn new(name: &'a str) -> Self {
+        Self(BytesStart::borrowed_name(name.as_bytes()))
     }
 
-    /// Parse a single required element from the given element iterator.
-    fn parse_one<'a>(it: &mut impl Iterator<Item = &'a Element>) -> Result<Self> {
-        parse_one(Self::NAME, it, Self::parse)
+    fn print_str(name: &'a str, elem: &str, w: &mut XWriter<impl Write>) -> Result<()> {
+        let e = Self::new(name).start(w)?;
+        print_str(elem, w)?;
+        e.end(w)
     }
 
-    /// Parse an optional element from the given element iterator, using [`Self::NAME`] to
-    /// determine if it is the correct type.
-    fn parse_opt(it: &mut ElementIter<'_>) -> Result<Option<Self>> {
-        parse_opt(Self::NAME, it, Self::parse)
+    fn print<T: Display>(name: &'a str, elem: &T, w: &mut XWriter<impl Write>) -> Result<()> {
+        let e = Self::new(name).start(w)?;
+        print_elem(elem, w)?;
+        e.end(w)
     }
 
-    /// Parse an optional boxed element from the given element iterator, using [`Self::NAME`] to
-    /// determine if it is the correct type.
-    fn parse_opt_box(it: &mut ElementIter<'_>) -> Result<Option<Box<Self>>> {
-        parse_opt(Self::NAME, it, Self::parse_box)
+    fn opt_print<T: Display>(
+        name: &'a str,
+        elem: &Option<T>,
+        w: &mut XWriter<impl Write>,
+    ) -> Result<()> {
+        opt(elem, |e| Self::print(name, e, w))
     }
 
-    /// Parse a list of elements from the given element iterator,
-    /// as long as it continues yielding elements of name [`Self::NAME`].
-    fn parse_list(it: &mut ElementIter<'_>) -> Result<Vec<Self>> {
-        parse_list(Self::NAME, it, Self::parse)
-    }
-
-    /// Parse a list of elements from the given element iterator,
-    /// as long as it continues yielding elements of name [`Self::NAME`],
-    /// and assert that the resulting list has length at least `N`.
-    fn parse_list_n<const N: usize>(it: &mut ElementIter<'_>) -> Result<Vec<Self>> {
-        let arr = parse_list(Self::NAME, it, Self::parse)?;
-        if arr.len() < N {
-            return Err(format!("parse error: expected {} {} elements", N, Self::NAME).into());
+    fn def_print<T: Display + PartialEq>(
+        name: &'a str,
+        value: T,
+        def: T,
+        w: &mut XWriter<impl Write>,
+    ) -> Result<()> {
+        if value != def {
+            Self::print(name, &value, w)?
         }
-        Ok(arr)
+        Ok(())
+    }
+
+    fn print_arr<T: Display>(name: &'a str, elem: &[T], w: &mut XWriter<impl Write>) -> Result<()> {
+        let e = Self::new(name).start(w)?;
+        print_arr(elem, w)?;
+        e.end(w)
+    }
+
+    #[inline]
+    fn raw_attr(&mut self, key: &str, value: &[u8]) {
+        self.0.push_attribute((key.as_bytes(), value));
+    }
+
+    #[inline]
+    fn attr(&mut self, key: &str, value: &str) {
+        self.0.push_attribute((key, value));
+    }
+
+    fn opt_attr(&mut self, key: &str, value: &Option<String>) {
+        if let Some(value) = value {
+            self.attr(key, value)
+        }
+    }
+
+    #[inline]
+    fn print_attr(&mut self, key: &str, value: impl Display) {
+        self.0.push_attribute((key, &*format!("{}", value)));
+    }
+
+    fn opt_print_attr(&mut self, key: &str, value: &Option<impl Display>) {
+        if let Some(value) = value {
+            self.0.push_attribute((key, &*format!("{}", value)));
+        }
+    }
+
+    fn def_print_attr<T: Display + PartialEq>(&mut self, key: &str, value: T, def: T) {
+        if value != def {
+            self.print_attr(key, value)
+        }
+    }
+
+    fn start(self, w: &mut XWriter<impl Write>) -> Result<ElemEnd<'static>> {
+        let end = self.0.to_end().into_owned();
+        w.write_event(Event::Start(self.0))?;
+        Ok(ElemEnd(end))
+    }
+
+    fn end(self, w: &mut XWriter<impl Write>) -> Result<()> {
+        Ok(w.write_event(Event::Empty(self.0))?)
+    }
+}
+
+impl<'a> ElemEnd<'a> {
+    fn end(self, w: &mut XWriter<impl Write>) -> Result<()> {
+        Ok(w.write_event(Event::End(self.0))?)
+    }
+}
+
+use private::{XNode, XNodeWrite};
+pub(crate) mod private {
+    use super::*;
+
+    /// A common trait for all data structures that represent an XML element.
+    pub trait XNode: XNodeWrite + Sized {
+        /// The name of the XML element.
+        const NAME: &'static str;
+
+        /// Parse an XML element into this type. In most cases, the parser will require with a
+        /// `debug_assert` that the element to parse has name [`Self::NAME`].
+        fn parse(element: &Element) -> Result<Self>;
+
+        /// Parse an XML element and return the data structure in a `Box`.
+        /// This can be faster in some cases when the data structure is large.
+        fn parse_box(element: &Element) -> Result<Box<Self>> {
+            Self::parse(element).map(Box::new)
+        }
+
+        /// Parse a single required element from the given element iterator.
+        fn parse_one<'a>(it: &mut impl Iterator<Item = &'a Element>) -> Result<Self> {
+            parse_one(Self::NAME, it, Self::parse)
+        }
+
+        /// Parse an optional element from the given element iterator, using [`Self::NAME`] to
+        /// determine if it is the correct type.
+        fn parse_opt(it: &mut ElementIter<'_>) -> Result<Option<Self>> {
+            parse_opt(Self::NAME, it, Self::parse)
+        }
+
+        /// Parse an optional boxed element from the given element iterator, using [`Self::NAME`] to
+        /// determine if it is the correct type.
+        fn parse_opt_box(it: &mut ElementIter<'_>) -> Result<Option<Box<Self>>> {
+            parse_opt(Self::NAME, it, Self::parse_box)
+        }
+
+        /// Parse a list of elements from the given element iterator,
+        /// as long as it continues yielding elements of name [`Self::NAME`].
+        fn parse_list(it: &mut ElementIter<'_>) -> Result<Vec<Self>> {
+            parse_list(Self::NAME, it, Self::parse)
+        }
+
+        /// Parse a list of elements from the given element iterator,
+        /// as long as it continues yielding elements of name [`Self::NAME`],
+        /// and assert that the resulting list has length at least `N`.
+        fn parse_list_n<const N: usize>(it: &mut ElementIter<'_>) -> Result<Vec<Self>> {
+            let arr = parse_list(Self::NAME, it, Self::parse)?;
+            if arr.len() < N {
+                return Err(format!("parse error: expected {} {} elements", N, Self::NAME).into());
+            }
+            Ok(arr)
+        }
+
+        /// Create a new element builder.
+        #[doc(hidden)]
+        fn elem<'a>() -> ElemBuilder<'a> {
+            ElemBuilder::new(Self::NAME)
+        }
+    }
+
+    pub trait XNodeWrite {
+        /// Writes the node to the given [`quick_xml::Writer`](minidom::quick_xml::Writer).
+        fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()>;
+    }
+}
+
+impl<T: XNodeWrite> XNodeWrite for Box<T> {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        (**self).write_to(w)
+    }
+}
+
+impl<T: XNodeWrite> XNodeWrite for Option<T> {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        opt(self, |e| e.write_to(w))
+    }
+}
+
+impl<T: XNodeWrite> XNodeWrite for Vec<T> {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        many(self, |e| e.write_to(w))
+    }
+}
+
+impl XNodeWrite for Element {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        use std::{cell::RefCell, collections::BTreeMap};
+        thread_local! {
+            static COLLADA_PREFIX: RefCell<BTreeMap<Option<String>, String>> =
+                RefCell::new(BTreeMap::new());
+        }
+        COLLADA_PREFIX.with(|pfxs| {
+            let mut pfxs = pfxs.borrow_mut();
+            if pfxs.is_empty() {
+                pfxs.insert(None, "http://www.collada.org/2005/11/COLLADASchema".into());
+            }
+            Ok(self.write_to_inner(w, &mut pfxs)?)
+        })
+    }
+}
+
+impl XNodeWrite for () {
+    fn write_to<W: Write>(&self, _: &mut XWriter<W>) -> Result<()> {
+        Ok(())
     }
 }
 
@@ -400,6 +597,11 @@ impl Document {
         let root = minidom::Element::from_reader(reader)?;
         Self::parse(&root)
     }
+
+    /// Write the document to a writer.
+    pub fn write_to<W: Write>(&self, w: W) -> Result<()> {
+        XNodeWrite::write_to(self, &mut XWriter::new_with_indent(w, b' ', 2))
+    }
 }
 
 impl XNode for Document {
@@ -419,6 +621,22 @@ impl XNode for Document {
             scene: Scene::parse_opt(&mut it)?,
             extra: Extra::parse_many(it)?,
         })
+    }
+}
+
+impl XNodeWrite for Document {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        w.write_event(Event::Decl(BytesDecl::new(b"1.0", Some(b"utf-8"), None)))?;
+        let mut e = Self::elem();
+        e.raw_attr("xmlns", b"http://www.collada.org/2005/11/COLLADASchema");
+        e.raw_attr("version", b"1.4.1");
+        e.raw_attr("xmlns:xsi", b"http://www.w3.org/2001/XMLSchema-instance");
+        let e = e.start(w)?;
+        self.asset.write_to(w)?;
+        self.library.write_to(w)?;
+        self.scene.write_to(w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
     }
 }
 

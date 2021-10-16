@@ -30,6 +30,19 @@ impl XNode for Controller {
     }
 }
 
+impl XNodeWrite for Controller {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.opt_attr("id", &self.id);
+        e.opt_attr("name", &self.name);
+        let e = e.start(w)?;
+        self.asset.write_to(w)?;
+        self.element.write_to(w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
+    }
+}
+
 /// Extra data associated to [`Instance`]<[`Controller`]>.
 #[derive(Clone, Debug)]
 pub struct InstanceControllerData {
@@ -40,6 +53,13 @@ pub struct InstanceControllerData {
     pub bind_material: Option<BindMaterial>,
 }
 
+impl XNodeWrite for InstanceControllerData {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        many(&self.skeleton, |e| ElemBuilder::print("skeleton", e, w))?;
+        self.bind_material.write_to(w)
+    }
+}
+
 impl Instantiate for Controller {
     const INSTANCE: &'static str = "instance_controller";
     type Data = InstanceControllerData;
@@ -48,6 +68,9 @@ impl Instantiate for Controller {
             skeleton: parse_list("skeleton", it, parse_elem)?,
             bind_material: BindMaterial::parse_opt(it)?,
         })
+    }
+    fn is_empty(data: &Self::Data) -> bool {
+        data.skeleton.is_empty() && data.bind_material.is_none()
     }
 }
 
@@ -87,6 +110,15 @@ impl ControlElement {
     }
 }
 
+impl XNodeWrite for ControlElement {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        match self {
+            Self::Skin(e) => e.write_to(w),
+            Self::Morph(e) => e.write_to(w),
+        }
+    }
+}
+
 /// Declares the association between joint nodes and attribute data.
 #[derive(Clone, Debug)]
 pub struct Joints {
@@ -116,6 +148,15 @@ impl XNode for Joints {
             inputs,
             extra: Extra::parse_many(it)?,
         })
+    }
+}
+
+impl XNodeWrite for Joints {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let e = Self::elem().start(w)?;
+        self.inputs.write_to(w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
     }
 }
 
@@ -156,6 +197,19 @@ impl XNode for Morph {
     }
 }
 
+impl XNodeWrite for Morph {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.print_attr("source", &self.source);
+        e.print_attr("method", &self.method);
+        let e = e.start(w)?;
+        self.sources.write_to(w)?;
+        self.targets.write_to(w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
+    }
+}
+
 /// Which blending technique to use.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MorphMethod {
@@ -186,6 +240,22 @@ impl FromStr for MorphMethod {
             "RELATIVE" => Ok(Self::Relative),
             _ => Err(()),
         }
+    }
+}
+
+impl MorphMethod {
+    /// The XML name of a value in this enumeration.
+    pub fn to_str(self) -> &'static str {
+        match self {
+            Self::Normalized => "NORMALIZED",
+            Self::Relative => "RELATIVE",
+        }
+    }
+}
+
+impl Display for MorphMethod {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(self.to_str(), f)
     }
 }
 
@@ -230,6 +300,22 @@ impl XNode for Skin {
     }
 }
 
+impl XNodeWrite for Skin {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.print_attr("source", &self.source);
+        let e = e.start(w)?;
+        opt(&self.bind_shape_matrix, |e| {
+            ElemBuilder::print_arr("bind_shape_matrix", &**e, w)
+        })?;
+        self.sources.write_to(w)?;
+        self.joints.write_to(w)?;
+        self.weights.write_to(w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
+    }
+}
+
 /// Declares morph targets, their weights, and any user-defined attributes associated with them.
 #[derive(Clone, Debug)]
 pub struct Targets {
@@ -261,6 +347,15 @@ impl XNode for Targets {
             inputs,
             extra: Extra::parse_many(it)?,
         })
+    }
+}
+
+impl XNodeWrite for Targets {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let e = Self::elem().start(w)?;
+        self.inputs.write_to(w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
     }
 }
 
@@ -316,6 +411,19 @@ impl XNode for VertexWeights {
         };
         validate_vcount(res.count, res.inputs.depth, &res.vcount, &res.prim)?;
         Ok(res)
+    }
+}
+
+impl XNodeWrite for VertexWeights {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.print_attr("count", &self.count);
+        let e = e.start(w)?;
+        self.inputs.write_to(w)?;
+        ElemBuilder::print_arr("vcount", &self.vcount, w)?;
+        ElemBuilder::print_arr("v", &self.prim, w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
     }
 }
 

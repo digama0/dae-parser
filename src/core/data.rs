@@ -3,15 +3,15 @@ use crate::*;
 /// Describes a stream of values from an array data source.
 #[derive(Clone, Debug)]
 pub struct Accessor {
-    /// The number of times the array is accessed.
-    pub count: usize,
-    /// The index of the first value to be read from the array.
-    pub offset: usize,
     /// The location of the array to access using a URI expression.
     /// This element may refer to a COLLADA array element or to an
     /// array data source outside the scope of the document;
     /// the source does not need to be a COLLADA document.
     pub source: Url,
+    /// The number of times the array is accessed.
+    pub count: usize,
+    /// The index of the first value to be read from the array.
+    pub offset: usize,
     /// The number of values that are to be considered a unit during each access to the array.
     /// The default is 1, indicating that a single value is accessed.
     pub stride: usize,
@@ -25,9 +25,9 @@ impl XNode for Accessor {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
         let res = Accessor {
+            source: parse_attr(element.attr("source"))?.ok_or("missing source attr")?,
             count: parse_attr(element.attr("count"))?.ok_or("expected 'count' attr")?,
             offset: parse_attr(element.attr("offset"))?.unwrap_or(0),
-            source: parse_attr(element.attr("source"))?.ok_or("missing source attr")?,
             stride: parse_attr(element.attr("stride"))?.unwrap_or(1),
             param: Param::parse_list(&mut it)?,
         };
@@ -35,6 +35,19 @@ impl XNode for Accessor {
             return Err("accessor stride does not match params".into());
         }
         finish(res, it)
+    }
+}
+
+impl XNodeWrite for Accessor {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.print_attr("source", &self.source);
+        e.print_attr("count", &self.count);
+        e.def_print_attr("offset", self.offset, 0);
+        e.def_print_attr("stride", self.stride, 1);
+        let e = e.start(w)?;
+        self.param.write_to(w)?;
+        e.end(w)
     }
 }
 
@@ -56,7 +69,7 @@ fn parse_array_count<T: FromStr>(e: &Element) -> Result<Box<[T]>> {
 /// A trait for the common functionality of the array types.
 pub trait ArrayKind: HasId + XNode + Deref<Target = [Self::Elem]> + 'static {
     /// The stored element type.
-    type Elem: Clone + Debug + 'static;
+    type Elem: Clone + Display + Debug + 'static;
     /// Extract a typed array from an [`ArrayElement`].
     fn from_array_element(elem: &ArrayElement) -> Option<&Self>;
 }
@@ -89,6 +102,16 @@ macro_rules! mk_arrays {
                     })
                 }
             }
+            impl XNodeWrite for $tyname {
+                fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+                    let mut e = Self::elem();
+                    e.opt_attr("id", &self.id);
+                    e.print_attr("count", self.val.len());
+                    let e = e.start(w)?;
+                    print_arr(&self.val, w)?;
+                    e.end(w)
+                }
+            }
             impl CollectLocalMaps for $tyname {
                 fn collect_local_maps<'a>(&'a self, maps: &mut LocalMaps<'a>) {
                     maps.insert(self)
@@ -109,6 +132,14 @@ macro_rules! mk_arrays {
         #[derive(Clone, Debug)]
         pub enum ArrayElement {
             $($(#[$doc])* $name($tyname),)*
+        }
+
+        impl XNodeWrite for ArrayElement {
+            fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+                match self {
+                    $(Self::$name(e) => e.write_to(w),)*
+                }
+            }
         }
 
         impl CollectLocalMaps for ArrayElement {
@@ -190,6 +221,17 @@ impl XNode for Param {
     }
 }
 
+impl XNodeWrite for Param {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.opt_attr("sid", &self.sid);
+        e.opt_attr("name", &self.name);
+        e.attr("type", &self.ty);
+        e.opt_print_attr("semantic", &self.semantic);
+        e.end(w)
+    }
+}
+
 /// Declares a data repository that provides values
 /// according to the semantics of an [`Input`] element that refers to it.
 #[derive(Clone, Debug)]
@@ -230,6 +272,22 @@ impl XNode for Source {
             }
         }
         finish(res, it)
+    }
+}
+
+impl XNodeWrite for Source {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.opt_attr("id", &self.id);
+        e.opt_attr("name", &self.name);
+        let e = e.start(w)?;
+        self.asset.write_to(w)?;
+        self.array.write_to(w)?;
+        let common = ElemBuilder::new(Technique::COMMON).start(w)?;
+        self.accessor.write_to(w)?;
+        common.end(w)?;
+        self.technique.write_to(w)?;
+        e.end(w)
     }
 }
 
@@ -290,6 +348,15 @@ impl XNode for Input {
     }
 }
 
+impl XNodeWrite for Input {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.print_attr("semantic", &self.semantic);
+        e.print_attr("source", &self.source);
+        e.end(w)
+    }
+}
+
 impl Input {
     /// Typecast `self.source` as a `UrlRef<Source>`.
     /// The `semantic` is checked in debug mode to ensure that it is compatible with a
@@ -339,6 +406,17 @@ impl XNode for InputS {
             offset: parse_attr(element.attr("offset"))?.ok_or("missing offset attr")?,
             set: parse_attr(element.attr("set"))?,
         })
+    }
+}
+
+impl XNodeWrite for InputS {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.print_attr("semantic", &self.semantic);
+        e.print_attr("source", &self.source);
+        e.print_attr("offset", &self.offset);
+        e.opt_print_attr("set", &self.set);
+        e.end(w)
     }
 }
 

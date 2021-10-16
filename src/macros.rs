@@ -15,6 +15,13 @@ macro_rules! mk_extensible_enum {
                     _ => Self::Other(s.into()),
                 }
             }
+
+            fn to_str(&self) -> &str {
+                match self {
+                    $(Self::$n => $t,)*
+                    Self::Other(s) => s,
+                }
+            }
         }
 
         impl FromStr for $ty {
@@ -22,6 +29,12 @@ macro_rules! mk_extensible_enum {
 
             fn from_str(s: &str) -> Result<Self, Self::Err> {
                 Ok(Self::parse(s))
+            }
+        }
+
+        impl Display for $ty {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                Display::fmt(self.to_str(), f)
             }
         }
     };

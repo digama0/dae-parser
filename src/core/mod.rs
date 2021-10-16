@@ -21,6 +21,12 @@ pub use {
 #[derive(Clone, Debug)]
 pub struct Address(pub String);
 
+impl Display for Address {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(&self.0, f)
+    }
+}
+
 /// A trait for nodes that can be placed in a library element.
 pub trait ParseLibrary: XNode {
     /// The name of the library element. For example, the [`Geometry`] element has
@@ -43,6 +49,13 @@ pub struct Library<T> {
     pub extra: Vec<Extra>,
 }
 
+impl<T> Library<T> {
+    /// Does this element have no children?
+    pub fn is_empty(&self) -> bool {
+        self.asset.is_none() && self.items.is_empty() && self.extra.is_empty()
+    }
+}
+
 impl<T: ParseLibrary> XNode for Library<T> {
     const NAME: &'static str = T::LIBRARY;
     fn parse(element: &Element) -> Result<Self> {
@@ -53,6 +66,21 @@ impl<T: ParseLibrary> XNode for Library<T> {
             items: T::parse_list(&mut it)?, // should be 1 or more but blender disagrees
             extra: Extra::parse_many(it)?,
         })
+    }
+}
+
+impl<T: ParseLibrary> XNodeWrite for Library<T> {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let e = Self::elem();
+        if self.is_empty() {
+            e.end(w)
+        } else {
+            let e = e.start(w)?;
+            self.asset.write_to(w)?;
+            self.items.write_to(w)?;
+            self.extra.write_to(w)?;
+            e.end(w)
+        }
     }
 }
 
@@ -118,6 +146,14 @@ macro_rules! mk_libraries {
                     $($arg::LIBRARY => Self::$name(Library::parse(e)?),)*
                     _ => return Ok(None),
                 }))
+            }
+        }
+
+        impl XNodeWrite for LibraryElement {
+            fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+                match self {
+                    $(Self::$name(lib) => lib.write_to(w),)*
+                }
             }
         }
 
@@ -198,24 +234,36 @@ pub struct Instance<T: Instantiate> {
     /// The URL of the location of the `T` element to instantiate.
     /// Can refer to a local instance or external reference.
     pub url: UrlRef<T>,
+    /// The text string name of this element.
+    pub name: Option<String>,
     /// The additional data associated with the instantiation, if any.
     pub data: T::Data,
     /// Provides arbitrary additional information about this element.
     pub extra: Vec<Extra>,
 }
 
-/// The trait for types that can be used in [`Instance<T>`].
-pub trait Instantiate {
-    /// The name of the instance node.
-    /// For example `Geometry::INSTANCE = "instance_geometry"`.
-    const INSTANCE: &'static str;
+pub(crate) use private::Instantiate;
+pub(crate) mod private {
+    use super::*;
+    /// The trait for types that can be used in [`Instance<T>`].
+    pub trait Instantiate {
+        /// The name of the instance node.
+        /// For example `Geometry::INSTANCE = "instance_geometry"`.
+        const INSTANCE: &'static str;
 
-    /// The type of additional data associated with instantiations, possibly `()`.
-    type Data;
+        /// The type of additional data associated with instantiations, possibly `()`.
+        type Data: XNodeWrite;
 
-    /// Parse the [`Self::Data`] given an element iterator,
-    /// and a reference to the parent element.
-    fn parse_data(e: &Element, it: &mut ElementIter<'_>) -> Result<Self::Data>;
+        /// Parse the [`Self::Data`] given an element iterator,
+        /// and a reference to the parent element.
+        fn parse_data(e: &Element, it: &mut ElementIter<'_>) -> Result<Self::Data>;
+
+        /// Write attributes from the [`Self::Data`], before the main write.
+        fn write_attr(_: &Self::Data, _: &mut ElemBuilder) {}
+
+        /// Returns true if the data field has no elements.
+        fn is_empty(_: &Self::Data) -> bool;
+    }
 }
 
 impl<T: Instantiate> XNode for Instance<T> {
@@ -226,9 +274,28 @@ impl<T: Instantiate> XNode for Instance<T> {
         Ok(Instance {
             sid: element.attr("sid").map(Into::into),
             url: parse_attr(element.attr("url"))?.ok_or("missing url attribute")?,
+            name: element.attr("name").map(Into::into),
             data: T::parse_data(element, &mut it)?,
             extra: Extra::parse_many(it)?,
         })
+    }
+}
+
+impl<T: Instantiate> XNodeWrite for Instance<T> {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.opt_attr("sid", &self.sid);
+        e.print_attr("url", &self.url);
+        e.opt_attr("name", &self.name);
+        T::write_attr(&self.data, &mut e);
+        if T::is_empty(&self.data) && self.extra.is_empty() {
+            e.end(w)
+        } else {
+            let e = e.start(w)?;
+            self.data.write_to(w)?;
+            self.extra.write_to(w)?;
+            e.end(w)
+        }
     }
 }
 
@@ -285,6 +352,15 @@ impl<T: Instantiate + XNode> DefInstance<T> {
     }
 }
 
+impl<T: Instantiate + XNodeWrite> XNodeWrite for DefInstance<T> {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        match self {
+            DefInstance::Def(e) => e.write_to(w),
+            DefInstance::Ref(e) => e.write_to(w),
+        }
+    }
+}
+
 impl<T: Instantiate + CollectLocalMaps> CollectLocalMaps for DefInstance<T> {
     fn collect_local_maps<'a>(&'a self, maps: &mut LocalMaps<'a>) {
         if let DefInstance::Def(t) = self {
@@ -301,6 +377,7 @@ macro_rules! basic_instance {
             fn parse_data(_: &Element, _: &mut ElementIter<'_>) -> Result<Self::Data> {
                 Ok(())
             }
+            fn is_empty(_: &Self::Data) -> bool { true }
         })*
     }
 }

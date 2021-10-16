@@ -37,6 +37,22 @@ impl XNode for PhysicsMaterial {
     }
 }
 
+impl XNodeWrite for PhysicsMaterial {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.opt_attr("id", &self.id);
+        e.opt_attr("name", &self.name);
+        let e = e.start(w)?;
+        self.asset.write_to(w)?;
+        let common = ElemBuilder::new(Technique::COMMON).start(w)?;
+        self.common.write_to(w)?;
+        common.end(w)?;
+        self.technique.write_to(w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
+    }
+}
+
 /// Specifies physics-material information for the common
 /// profile that all COLLADA implementations must support.
 #[derive(Clone, Copy, Debug)]
@@ -60,5 +76,13 @@ impl PhysicsMaterialCommon {
             static_friction: parse_opt("static_friction", &mut it, parse_elem)?.unwrap_or(0.),
         };
         finish(res, it)
+    }
+}
+
+impl XNodeWrite for PhysicsMaterialCommon {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        ElemBuilder::def_print("dynamic_friction", self.dynamic_friction, 0., w)?;
+        ElemBuilder::def_print("restitution", self.restitution, 0., w)?;
+        ElemBuilder::def_print("static_friction", self.static_friction, 0., w)
     }
 }

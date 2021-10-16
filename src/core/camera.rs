@@ -34,6 +34,20 @@ impl XNode for Camera {
     }
 }
 
+impl XNodeWrite for Camera {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.opt_attr("id", &self.id);
+        e.opt_attr("name", &self.name);
+        let e = e.start(w)?;
+        self.asset.write_to(w)?;
+        self.optics.write_to(w)?;
+        self.imager.write_to(w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
+    }
+}
+
 /// Represents the image sensor of a camera (for example, film or CCD).
 #[derive(Clone, Debug)]
 pub struct Imager {
@@ -54,6 +68,15 @@ impl XNode for Imager {
             technique: Technique::parse_list_n::<1>(&mut it)?,
             extra: Extra::parse_many(it)?,
         })
+    }
+}
+
+impl XNodeWrite for Imager {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let e = Self::elem().start(w)?;
+        self.technique.write_to(w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
     }
 }
 
@@ -84,6 +107,18 @@ impl XNode for Optics {
     }
 }
 
+impl XNodeWrite for Optics {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let e = Self::elem().start(w)?;
+        let common = ElemBuilder::new(Technique::COMMON).start(w)?;
+        self.ty.write_to(w)?;
+        common.end(w)?;
+        self.technique.write_to(w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
+    }
+}
+
 /// The projection type of the camera.
 #[derive(Clone, Debug)]
 pub enum ProjectionType {
@@ -100,6 +135,15 @@ impl ProjectionType {
             Orthographic::NAME => Ok(Some(Self::Orthographic(Orthographic::parse(e)?))),
             Perspective::NAME => Ok(Some(Self::Perspective(Perspective::parse(e)?))),
             _ => Ok(None),
+        }
+    }
+}
+
+impl XNodeWrite for ProjectionType {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        match self {
+            Self::Orthographic(e) => e.write_to(w),
+            Self::Perspective(e) => e.write_to(w),
         }
     }
 }
@@ -138,6 +182,19 @@ impl XNode for Orthographic {
     }
 }
 
+impl XNodeWrite for Orthographic {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let e = Self::elem().start(w)?;
+        ElemBuilder::opt_print("xmag", &self.xmag, w)?;
+        ElemBuilder::opt_print("ymag", &self.ymag, w)?;
+        self.extra.write_to(w)?;
+        ElemBuilder::opt_print("aspect_ratio", &self.aspect_ratio, w)?;
+        ElemBuilder::print("znear", &self.znear, w)?;
+        ElemBuilder::print("zfar", &self.zfar, w)?;
+        e.end(w)
+    }
+}
+
 /// Describes the field of view of a perspective camera.
 #[derive(Clone, Copy, Debug)]
 pub struct Perspective {
@@ -166,5 +223,17 @@ impl XNode for Perspective {
             zfar: parse_one("zfar", &mut it, parse_elem)?,
         };
         finish(res, it)
+    }
+}
+
+impl XNodeWrite for Perspective {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let e = Self::elem().start(w)?;
+        ElemBuilder::opt_print("xfov", &self.xfov, w)?;
+        ElemBuilder::opt_print("yfov", &self.yfov, w)?;
+        ElemBuilder::opt_print("aspect_ratio", &self.aspect_ratio, w)?;
+        ElemBuilder::print("znear", &self.znear, w)?;
+        ElemBuilder::print("zfar", &self.zfar, w)?;
+        e.end(w)
     }
 }

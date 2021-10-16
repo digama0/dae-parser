@@ -1,4 +1,7 @@
-use std::{fmt::Debug, str::FromStr};
+use std::{
+    fmt::{Debug, Display},
+    str::FromStr,
+};
 
 use percent_encoding::{percent_decode_str, percent_encode, AsciiSet, CONTROLS};
 
@@ -34,11 +37,17 @@ impl FromStr for Url {
     }
 }
 
-impl Debug for Url {
+impl Display for Url {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Fragment(s) => format!("#{}", percent_encode(s.as_bytes(), FRAGMENT)).fmt(f),
-            Self::Other(s) => s.fmt(f),
+            Self::Fragment(s) => write!(f, "#{}", percent_encode(s.as_bytes(), FRAGMENT)),
+            Self::Other(s) => write!(f, "{}", s),
         }
+    }
+}
+
+impl Debug for Url {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(self, f)
     }
 }

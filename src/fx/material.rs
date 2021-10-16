@@ -31,6 +31,19 @@ impl XNode for Material {
     }
 }
 
+impl XNodeWrite for Material {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.opt_attr("id", &self.id);
+        e.opt_attr("name", &self.name);
+        let e = e.start(w)?;
+        self.asset.write_to(w)?;
+        self.instance_effect.write_to(w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
+    }
+}
+
 /// Instantiates a COLLADA material resource.
 #[derive(Clone, Debug)]
 pub struct InstanceMaterial {
@@ -39,6 +52,8 @@ pub struct InstanceMaterial {
     pub sid: Option<String>,
     /// The text string name of this element.
     pub name: Option<String>,
+    /// Which symbol defined from within the geometry this material binds to.
+    pub symbol: String,
     /// The URI of the location of the [`Material`] element to instantiate.
     /// Can refer to a local instance or external reference.
     /// For a local instance, this is a relative URI fragment identifier
@@ -47,8 +62,6 @@ pub struct InstanceMaterial {
     /// consists of the ID of the element to instantiate.
     /// For an external reference, this is an absolute or relative URL.
     pub target: UrlRef<Material>,
-    /// Which symbol defined from within the geometry this material binds to.
-    pub symbol: String,
     /// Connects a parameter in the material’s effect by semantic
     /// to a target in the scene.
     pub bind: Vec<BindM>,
@@ -67,12 +80,27 @@ impl XNode for InstanceMaterial {
         Ok(InstanceMaterial {
             sid: element.attr("sid").map(Into::into),
             name: element.attr("name").map(Into::into),
-            target: parse_attr(element.attr("target"))?.ok_or("missing target attribute")?,
             symbol: symbol.into(),
+            target: parse_attr(element.attr("target"))?.ok_or("missing target attribute")?,
             bind: BindM::parse_list(&mut it)?,
             bind_vertex_input: BindVertexInput::parse_list(&mut it)?,
             extra: Extra::parse_many(it)?,
         })
+    }
+}
+
+impl XNodeWrite for InstanceMaterial {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.opt_attr("sid", &self.sid);
+        e.opt_attr("name", &self.name);
+        e.attr("symbol", &self.symbol);
+        e.print_attr("target", &self.target);
+        let e = e.start(w)?;
+        self.bind.write_to(w)?;
+        self.bind_vertex_input.write_to(w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
     }
 }
 
@@ -110,6 +138,19 @@ impl XNode for BindMaterial {
     }
 }
 
+impl XNodeWrite for BindMaterial {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let e = Self::elem().start(w)?;
+        self.param.write_to(w)?;
+        let common = ElemBuilder::new(Technique::COMMON).start(w)?;
+        self.instance_material.write_to(w)?;
+        common.end(w)?;
+        self.technique.write_to(w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
+    }
+}
+
 /// Binds values to uniform inputs of a shader or binds values to effect
 /// parameters upon instantiation.
 /// In the COLLADA spec, this element is called "`<bind>` (material)".
@@ -130,5 +171,14 @@ impl XNode for BindM {
             semantic: element.attr("semantic").map(Into::into),
             target: Address(target.into()),
         })
+    }
+}
+
+impl XNodeWrite for BindM {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.opt_attr("semantic", &self.semantic);
+        e.print_attr("target", &self.target);
+        e.end(w)
     }
 }

@@ -13,9 +13,7 @@
 This is a parser for the Collada (`.dae`) format, used for interchange between 3D renderers
 and games. Compared to the [`collada`](https://crates.io/crates/collada) crate,
 this crate attempts to more directly represent the Collada data model, and it is also
-significantly more complete.
-
-Currently it only supports reading, but writing is a planned addition.
+significantly more complete. It supports both reading and writing.
 
 ## Usage
 

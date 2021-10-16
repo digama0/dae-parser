@@ -39,6 +39,20 @@ impl XNode for Shape {
     }
 }
 
+impl XNodeWrite for Shape {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let e = Self::elem().start(w)?;
+        ElemBuilder::opt_print("hollow", &self.hollow, w)?;
+        ElemBuilder::opt_print("mass", &self.mass, w)?;
+        ElemBuilder::opt_print("density", &self.density, w)?;
+        self.physics_material.write_to(w)?;
+        self.geom.write_to(w)?;
+        self.transform.write_to(w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
+    }
+}
+
 impl CollectLocalMaps for Shape {
     fn collect_local_maps<'a>(&'a self, maps: &mut LocalMaps<'a>) {
         self.physics_material.collect_local_maps(maps);
@@ -86,6 +100,21 @@ impl ShapeGeom {
     }
 }
 
+impl XNodeWrite for ShapeGeom {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        match self {
+            Self::Plane(e) => e.write_to(w),
+            Self::Box(e) => e.write_to(w),
+            Self::Sphere(e) => e.write_to(w),
+            Self::Cylinder(e) => e.write_to(w),
+            Self::TaperedCylinder(e) => e.write_to(w),
+            Self::Capsule(e) => e.write_to(w),
+            Self::TaperedCapsule(e) => e.write_to(w),
+            Self::Geom(e) => e.write_to(w),
+        }
+    }
+}
+
 /// Defines an infinite plane primitive.
 #[derive(Clone, Debug)]
 pub struct Plane {
@@ -104,6 +133,15 @@ impl XNode for Plane {
             equation: *parse_one("equation", &mut it, parse_array_n)?,
             extra: Extra::parse_many(it)?,
         })
+    }
+}
+
+impl XNodeWrite for Plane {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let e = Self::elem().start(w)?;
+        ElemBuilder::print_arr("equation", &self.equation, w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
     }
 }
 
@@ -129,6 +167,15 @@ impl XNode for BoxShape {
     }
 }
 
+impl XNodeWrite for BoxShape {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let e = Self::elem().start(w)?;
+        ElemBuilder::print_arr("half_extents", &self.half_extents, w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
+    }
+}
+
 /// Describes a centered sphere primitive.
 #[derive(Clone, Debug)]
 pub struct Sphere {
@@ -147,6 +194,15 @@ impl XNode for Sphere {
             radius: parse_one("radius", &mut it, parse_elem)?,
             extra: Extra::parse_many(it)?,
         })
+    }
+}
+
+impl XNodeWrite for Sphere {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let e = Self::elem().start(w)?;
+        ElemBuilder::print("radius", &self.radius, w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
     }
 }
 
@@ -171,6 +227,16 @@ impl XNode for Cylinder {
             radius: *parse_one("radius", &mut it, parse_array_n)?,
             extra: Extra::parse_many(it)?,
         })
+    }
+}
+
+impl XNodeWrite for Cylinder {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let e = Self::elem().start(w)?;
+        ElemBuilder::print("height", &self.height, w)?;
+        ElemBuilder::print_arr("radius", &self.radius, w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
     }
 }
 
@@ -203,6 +269,17 @@ impl XNode for TaperedCylinder {
     }
 }
 
+impl XNodeWrite for TaperedCylinder {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let e = Self::elem().start(w)?;
+        ElemBuilder::print("height", &self.height, w)?;
+        ElemBuilder::print_arr("radius1", &self.radius1, w)?;
+        ElemBuilder::print_arr("radius2", &self.radius2, w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
+    }
+}
+
 /// Declares a capsule primitive that is centered on and aligned with the local y axis.
 #[derive(Clone, Debug)]
 pub struct Capsule {
@@ -224,6 +301,16 @@ impl XNode for Capsule {
             radius: *parse_one("radius", &mut it, parse_array_n)?,
             extra: Extra::parse_many(it)?,
         })
+    }
+}
+
+impl XNodeWrite for Capsule {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let e = Self::elem().start(w)?;
+        ElemBuilder::print("height", &self.height, w)?;
+        ElemBuilder::print_arr("radius", &self.radius, w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
     }
 }
 
@@ -253,5 +340,16 @@ impl XNode for TaperedCapsule {
             radius2: *parse_one("radius2", &mut it, parse_array_n)?,
             extra: Extra::parse_many(it)?,
         })
+    }
+}
+
+impl XNodeWrite for TaperedCapsule {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let e = Self::elem().start(w)?;
+        ElemBuilder::print("height", &self.height, w)?;
+        ElemBuilder::print_arr("radius1", &self.radius1, w)?;
+        ElemBuilder::print_arr("radius2", &self.radius2, w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
     }
 }

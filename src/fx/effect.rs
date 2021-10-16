@@ -44,6 +44,22 @@ impl XNode for Effect {
     }
 }
 
+impl XNodeWrite for Effect {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.attr("id", &self.id);
+        e.opt_attr("name", &self.name);
+        let e = e.start(w)?;
+        self.asset.write_to(w)?;
+        self.annotate.write_to(w)?;
+        self.image.write_to(w)?;
+        self.new_param.write_to(w)?;
+        self.profile.write_to(w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
+    }
+}
+
 impl Effect {
     /// Get the first [`ProfileCommon`] in this effect.
     pub fn get_common_profile(&self) -> Option<&ProfileCommon> {
@@ -72,6 +88,13 @@ pub struct InstanceEffectData {
     pub set_param: Vec<EffectSetParam>,
 }
 
+impl XNodeWrite for InstanceEffectData {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        self.technique_hint.write_to(w)?;
+        self.set_param.write_to(w)
+    }
+}
+
 impl Instantiate for Effect {
     const INSTANCE: &'static str = "instance_effect";
     type Data = InstanceEffectData;
@@ -80,6 +103,9 @@ impl Instantiate for Effect {
             technique_hint: TechniqueHint::parse_list(it)?,
             set_param: EffectSetParam::parse_list(it)?,
         })
+    }
+    fn is_empty(data: &Self::Data) -> bool {
+        data.technique_hint.is_empty() && data.set_param.is_empty()
     }
 }
 
@@ -108,8 +134,18 @@ impl XNode for BindVertexInput {
     }
 }
 
+impl XNodeWrite for BindVertexInput {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.attr("semantic", &self.semantic);
+        e.attr("input_semantic", &self.input_semantic);
+        e.opt_print_attr("input_set", &self.input_set);
+        e.end(w)
+    }
+}
+
 /// A trait for the types that are legal to go in a [`TechniqueFx<T>`].
-pub trait ProfileData: Sized {
+pub trait ProfileData: XNodeWrite + Sized {
     /// Parse the embedded data from a subsequence of children in the `<technique>` node.
     fn parse(it: &mut ElementIter<'_>) -> Result<Self>;
 }
@@ -139,12 +175,25 @@ impl<T: ProfileData> XNode for TechniqueFx<T> {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
         Ok(TechniqueFx {
-            id: element.attr("sid").map(Into::into),
+            id: element.attr("id").map(Into::into),
             sid: element.attr("sid").ok_or("expecting sid attr")?.into(),
             asset: Asset::parse_opt_box(&mut it)?,
             data: T::parse(&mut it)?,
             extra: Extra::parse_many(it)?,
         })
+    }
+}
+
+impl<T: ProfileData> XNodeWrite for TechniqueFx<T> {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.opt_attr("id", &self.id);
+        e.attr("sid", &self.sid);
+        let e = e.start(w)?;
+        self.asset.write_to(w)?;
+        self.data.write_to(w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
     }
 }
 
@@ -171,5 +220,15 @@ impl XNode for TechniqueHint {
             ref_: element.attr("ref").ok_or("expected 'ref' attr")?.into(),
             profile: element.attr("profile").map(Into::into),
         })
+    }
+}
+
+impl XNodeWrite for TechniqueHint {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.opt_attr("platform", &self.platform);
+        e.attr("ref", &self.ref_);
+        e.opt_attr("profile", &self.profile);
+        e.end(w)
     }
 }

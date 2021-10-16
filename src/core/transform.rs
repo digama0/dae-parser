@@ -69,6 +69,19 @@ impl Transform {
     }
 }
 
+impl XNodeWrite for Transform {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        match self {
+            Self::Translate(e) => e.write_to(w),
+            Self::Rotate(e) => e.write_to(w),
+            Self::LookAt(e) => e.write_to(w),
+            Self::Matrix(e) => e.write_to(w),
+            Self::Scale(e) => e.write_to(w),
+            Self::Skew(e) => e.write_to(w),
+        }
+    }
+}
+
 /// A [`RigidBody`] transform is a subset of the full set of [`Transform`]s
 /// which restricts to euclidean transformations (translation and rotation).
 #[derive(Clone, Debug)]
@@ -117,6 +130,15 @@ impl RigidTransform {
     }
 }
 
+impl XNodeWrite for RigidTransform {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        match self {
+            Self::Translate(e) => e.write_to(w),
+            Self::Rotate(e) => e.write_to(w),
+        }
+    }
+}
+
 /// Contains a position and orientation transformation suitable for aiming a camera.
 #[derive(Clone, Debug)]
 pub struct LookAt(
@@ -133,6 +155,12 @@ impl XNode for LookAt {
     fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         Ok(LookAt(parse_array_n(element)?))
+    }
+}
+
+impl XNodeWrite for LookAt {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        ElemBuilder::print_arr(Self::NAME, &*self.0, w)
     }
 }
 
@@ -183,6 +211,12 @@ impl XNode for Matrix {
     }
 }
 
+impl XNodeWrite for Matrix {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        ElemBuilder::print_arr(Self::NAME, &*self.0, w)
+    }
+}
+
 impl Matrix {
     #[cfg(feature = "nalgebra")]
     /// Convert this transformation to a [`nalgebra::Matrix4`].
@@ -205,6 +239,12 @@ impl XNode for Rotate {
     fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         Ok(Rotate(parse_array_n(element)?))
+    }
+}
+
+impl XNodeWrite for Rotate {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        ElemBuilder::print_arr(Self::NAME, &*self.0, w)
     }
 }
 
@@ -243,6 +283,12 @@ impl XNode for Scale {
     }
 }
 
+impl XNodeWrite for Scale {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        ElemBuilder::print_arr(Self::NAME, &*self.0, w)
+    }
+}
+
 impl Scale {
     #[cfg(feature = "nalgebra")]
     /// Convert this transformation to a [`nalgebra::Matrix4`].
@@ -277,6 +323,12 @@ impl XNode for Skew {
     fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         Ok(Skew(parse_array_n(element)?))
+    }
+}
+
+impl XNodeWrite for Skew {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        ElemBuilder::print_arr(Self::NAME, &*self.0, w)
     }
 }
 
@@ -332,6 +384,12 @@ impl XNode for Translate {
     fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         Ok(Translate(parse_array_n(element)?))
+    }
+}
+
+impl XNodeWrite for Translate {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        ElemBuilder::print_arr(Self::NAME, &*self.0, w)
     }
 }
 

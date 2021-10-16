@@ -47,6 +47,22 @@ impl XNode for Animation {
     }
 }
 
+impl XNodeWrite for Animation {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.opt_attr("id", &self.id);
+        e.opt_attr("name", &self.name);
+        let e = e.start(w)?;
+        self.asset.write_to(w)?;
+        self.children.write_to(w)?;
+        self.source.write_to(w)?;
+        self.sampler.write_to(w)?;
+        self.channel.write_to(w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
+    }
+}
+
 impl CollectLocalMaps for Animation {
     fn collect_local_maps<'a>(&'a self, maps: &mut LocalMaps<'a>) {
         maps.insert(self);
@@ -119,6 +135,21 @@ impl XNode for AnimationClip {
     }
 }
 
+impl XNodeWrite for AnimationClip {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.opt_attr("id", &self.id);
+        e.opt_attr("name", &self.name);
+        e.print_attr("start", &self.start);
+        e.opt_print_attr("end", &self.end);
+        let e = e.start(w)?;
+        self.asset.write_to(w)?;
+        self.instance_animation.write_to(w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
+    }
+}
+
 /// Declares an output channel of an animation.
 #[derive(Clone, Debug)]
 pub struct Channel {
@@ -137,6 +168,15 @@ impl XNode for Channel {
             source: parse_attr(element.attr("source"))?.ok_or("missing source attr")?,
             target: Address(target.into()),
         })
+    }
+}
+
+impl XNodeWrite for Channel {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.print_attr("source", &self.source);
+        e.print_attr("target", &self.target);
+        e.end(w)
     }
 }
 
@@ -166,6 +206,16 @@ impl XNode for Sampler {
             inputs,
         };
         finish(res, it)
+    }
+}
+
+impl XNodeWrite for Sampler {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.opt_attr("id", &self.id);
+        let e = e.start(w)?;
+        self.inputs.write_to(w)?;
+        e.end(w)
     }
 }
 

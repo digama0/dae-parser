@@ -30,6 +30,19 @@ impl XNode for Geometry {
     }
 }
 
+impl XNodeWrite for Geometry {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.opt_attr("id", &self.id);
+        e.opt_attr("name", &self.name);
+        let e = e.start(w)?;
+        self.asset.write_to(w)?;
+        self.element.write_to(w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
+    }
+}
+
 /// Extra data associated to [`Instance`]<[`Geometry`]>.
 #[derive(Clone, Debug)]
 pub struct InstanceGeometryData {
@@ -39,6 +52,12 @@ pub struct InstanceGeometryData {
     pub bind_material: Option<BindMaterial>,
 }
 
+impl XNodeWrite for InstanceGeometryData {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        self.bind_material.write_to(w)
+    }
+}
+
 impl Instantiate for Geometry {
     const INSTANCE: &'static str = "instance_geometry";
     type Data = InstanceGeometryData;
@@ -46,6 +65,9 @@ impl Instantiate for Geometry {
         Ok(InstanceGeometryData {
             bind_material: BindMaterial::parse_opt(it)?,
         })
+    }
+    fn is_empty(data: &Self::Data) -> bool {
+        data.bind_material.is_none()
     }
 }
 
@@ -106,6 +128,20 @@ impl GeometryElement {
     }
 }
 
+impl XNodeWrite for GeometryElement {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        match self {
+            GeometryElement::ConvexHullOf(s) => {
+                let mut e = ElemBuilder::new(Mesh::CONVEX);
+                e.print_attr("convex_hull_of", s);
+                e.end(w)
+            }
+            GeometryElement::Mesh(e) => e.write_to(w),
+            GeometryElement::Spline(e) => e.write_to(w),
+        }
+    }
+}
+
 /// Describes basic geometric meshes using vertex and primitive information.
 #[derive(Clone, Debug)]
 pub struct Mesh {
@@ -151,12 +187,27 @@ impl Mesh {
             extra: Extra::parse_many(it)?,
         })
     }
+
+    fn write_inner<W: Write>(&self, e: ElemBuilder, w: &mut XWriter<W>) -> Result<()> {
+        let e = e.start(w)?;
+        self.sources.write_to(w)?;
+        self.vertices.write_to(w)?;
+        self.elements.write_to(w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
+    }
 }
 
 impl XNode for Mesh {
     const NAME: &'static str = "mesh";
     fn parse(element: &Element) -> Result<Self> {
         Self::parse(false, element)
+    }
+}
+
+impl XNodeWrite for Mesh {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        self.write_inner(Self::elem(), w)
     }
 }
 
@@ -192,6 +243,18 @@ impl XNode for Vertices {
             inputs,
             extra: Extra::parse_many(it)?,
         })
+    }
+}
+
+impl XNodeWrite for Vertices {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.attr("id", &self.id);
+        e.opt_attr("name", &self.name);
+        let e = e.start(w)?;
+        self.inputs.write_to(w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
     }
 }
 
@@ -250,17 +313,21 @@ pub struct Geom<T> {
     pub extra: Vec<Extra>,
 }
 
-/// The trait for types that can appear in a [`Geom<T>`].
-pub trait ParseGeom: Default {
-    /// The name of the element for the enclosing `Geom`, for example
-    /// `"lines"` for [`LineGeom`].
-    const NAME: &'static str;
+pub(crate) use private::ParseGeom;
+pub(crate) mod private {
+    use super::*;
+    /// The trait for types that can appear in a [`Geom<T>`].
+    pub trait ParseGeom: XNodeWrite + Default {
+        /// The name of the element for the enclosing `Geom`, for example
+        /// `"lines"` for [`LineGeom`].
+        const NAME: &'static str;
 
-    /// Parse the data from an element iterator.
-    fn parse(it: &mut ElementIter<'_>) -> Result<Self>;
+        /// Parse the data from an element iterator.
+        fn parse(it: &mut ElementIter<'_>) -> Result<Self>;
 
-    /// Perform custom validation on the resulting [`Geom<T>`] before yielding it.
-    fn validate(_: &Geom<Self>) -> Result<()>;
+        /// Perform custom validation on the resulting [`Geom<T>`] before yielding it.
+        fn validate(_: &Geom<Self>) -> Result<()>;
+    }
 }
 
 impl<T: ParseGeom> XNode for Geom<T> {
@@ -279,6 +346,20 @@ impl<T: ParseGeom> XNode for Geom<T> {
         };
         T::validate(&res)?;
         Ok(res)
+    }
+}
+
+impl<T: ParseGeom> XNodeWrite for Geom<T> {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.opt_attr("name", &self.name);
+        e.opt_attr("material", &self.material);
+        e.print_attr("count", &self.count);
+        let e = e.start(w)?;
+        self.inputs.write_to(w)?;
+        self.data.write_to(w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
     }
 }
 
@@ -311,6 +392,13 @@ macro_rules! mk_primitive {
             )*
         }
 
+        impl XNodeWrite for Primitive {
+            fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+                match self {
+                    $(Self::$name(e) => e.write_to(w),)*
+                }
+            }
+        }
     }
 }
 
@@ -374,6 +462,12 @@ impl ParseGeom for LineGeom {
     }
 }
 
+impl XNodeWrite for LineGeom {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        opt(&self.prim, |e| ElemBuilder::print_arr("p", e, w))
+    }
+}
+
 /// The data for a [`LineStrips`] element.
 ///
 /// Each line-strip described by the mesh has an arbitrary number of vertices.
@@ -417,6 +511,14 @@ impl ParseGeom for LineStripGeom {
     }
 }
 
+impl XNodeWrite for LineStripGeom {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        self.prim
+            .iter()
+            .try_for_each(|e| ElemBuilder::print_arr("p", e, w))
+    }
+}
+
 /// The data for an individual polygon-with-hole.
 #[derive(Clone, Debug)]
 pub struct PolygonHole {
@@ -425,6 +527,15 @@ pub struct PolygonHole {
     /// A list of 0 or more holes, each of which describes a polygonal hole
     /// in the main polygon.
     pub hole: Vec<Box<[u32]>>,
+}
+
+impl XNodeWrite for PolygonHole {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let e = ElemBuilder::new("ph").start(w)?;
+        ElemBuilder::print_arr("p", &self.verts, w)?;
+        many(&self.hole, |h| ElemBuilder::print_arr("h", h, w))?;
+        e.end(w)
+    }
 }
 
 /// The data for a [`Polygons`] element.
@@ -485,6 +596,12 @@ impl ParseGeom for PolygonGeom {
     }
 }
 
+impl XNodeWrite for PolygonGeom {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        self.0.write_to(w)
+    }
+}
+
 /// The data for a [`PolyList`] element.
 #[derive(Clone, Default, Debug)]
 pub struct PolyListGeom {
@@ -537,6 +654,18 @@ impl ParseGeom for PolyListGeom {
     }
 }
 
+impl XNodeWrite for PolyListGeom {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        if !self.vcount.is_empty() {
+            ElemBuilder::print_arr("vcount", &self.vcount, w)?;
+        }
+        if !self.prim.is_empty() {
+            ElemBuilder::print_arr("p", &self.prim, w)?;
+        }
+        Ok(())
+    }
+}
+
 /// The data for a [`Triangles`] element.
 ///
 /// Each triangle described by the mesh has three vertices.
@@ -578,6 +707,12 @@ impl ParseGeom for TriangleGeom {
             }
         }
         Ok(())
+    }
+}
+
+impl XNodeWrite for TriangleGeom {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        opt(&self.prim, |e| ElemBuilder::print_arr("p", e, w))
     }
 }
 
@@ -628,6 +763,12 @@ impl ParseGeom for TriFanGeom {
     }
 }
 
+impl XNodeWrite for TriFanGeom {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        many(&self.prim, |e| ElemBuilder::print_arr("p", e, w))
+    }
+}
+
 /// The data for a [`TriStrips`] element.
 ///
 /// Each triangle described by the mesh has three vertices.
@@ -675,6 +816,12 @@ impl ParseGeom for TriStripGeom {
     }
 }
 
+impl XNodeWrite for TriStripGeom {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        many(&self.prim, |e| ElemBuilder::print_arr("p", e, w))
+    }
+}
+
 /// Describes a multisegment spline with control vertex (CV) and segment information.
 #[derive(Clone, Debug)]
 pub struct Spline {
@@ -703,6 +850,18 @@ impl XNode for Spline {
     }
 }
 
+impl XNodeWrite for Spline {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.def_print_attr("closed", self.closed, false);
+        let e = e.start(w)?;
+        self.sources.write_to(w)?;
+        self.controls.write_to(w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
+    }
+}
+
 /// Describes the control vertices (CVs) of a spline.
 #[derive(Clone, Debug)]
 pub struct ControlVertices {
@@ -728,6 +887,15 @@ impl XNode for ControlVertices {
             inputs,
             extra: Extra::parse_many(it)?,
         })
+    }
+}
+
+impl XNodeWrite for ControlVertices {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let e = Self::elem().start(w)?;
+        self.inputs.write_to(w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
     }
 }
 

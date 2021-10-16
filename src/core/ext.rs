@@ -35,6 +35,19 @@ impl XNode for Extra {
     }
 }
 
+impl XNodeWrite for Extra {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.opt_attr("id", &self.id);
+        e.opt_attr("name", &self.name);
+        e.opt_attr("type", &self.ty);
+        let e = e.start(w)?;
+        self.asset.write_to(w)?;
+        self.technique.write_to(w)?;
+        e.end(w)
+    }
+}
+
 impl Extra {
     pub(crate) fn parse_many<'a>(it: impl Iterator<Item = &'a Element>) -> Result<Vec<Extra>> {
         let mut extras = vec![];
@@ -67,6 +80,13 @@ impl XNode for Technique {
         })
     }
 }
+
+impl XNodeWrite for Technique {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        XNodeWrite::write_to(&self.element, w)
+    }
+}
+
 impl Technique {
     /// The name of the `<technique_common>` element.
     pub const COMMON: &'static str = "technique_common";

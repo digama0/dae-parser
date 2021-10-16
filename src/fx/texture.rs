@@ -50,6 +50,23 @@ impl XNode for Image {
     }
 }
 
+impl XNodeWrite for Image {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.opt_attr("id", &self.id);
+        e.opt_attr("name", &self.name);
+        e.opt_attr("format", &self.format);
+        e.def_print_attr("height", self.height, 0);
+        e.def_print_attr("width", self.width, 0);
+        e.def_print_attr("depth", self.depth, 1);
+        let e = e.start(w)?;
+        self.asset.write_to(w)?;
+        self.source.write_to(w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
+    }
+}
+
 /// An [`Image`] or [`NewParam`] element.
 #[derive(Clone, Debug)]
 pub enum ImageParam {
@@ -68,6 +85,15 @@ impl ImageParam {
                 _ => return Ok(None),
             }))
         })
+    }
+}
+
+impl XNodeWrite for ImageParam {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        match self {
+            Self::NewParam(e) => e.write_to(w),
+            Self::Image(e) => e.write_to(w),
+        }
     }
 }
 
@@ -112,6 +138,28 @@ impl ImageSource {
             "init_from" => ImageSource::InitFrom(parse_elem(element)?),
             _ => return Ok(None),
         }))
+    }
+}
+
+impl XNodeWrite for ImageSource {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        match self {
+            Self::Data(data) => {
+                let e = ElemBuilder::new("data").start(w)?;
+                let mut indent = false;
+                for chunk in data.chunks(40) {
+                    if indent {
+                        w.write_indent()?
+                    }
+                    indent = true;
+                    for &c in chunk {
+                        write!(w.inner(), "{:x}", c)?
+                    }
+                }
+                e.end(w)
+            }
+            Self::InitFrom(url) => ElemBuilder::print("init_from", url, w),
+        }
     }
 }
 
@@ -173,6 +221,25 @@ impl XNode for Sampler2D {
     }
 }
 
+impl XNodeWrite for Sampler2D {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let e = Self::elem().start(w)?;
+        ElemBuilder::print("source", &self.source, w)?;
+        ElemBuilder::def_print("wrap_s", self.wrap_s, Default::default(), w)?;
+        ElemBuilder::def_print("wrap_t", self.wrap_t, Default::default(), w)?;
+        ElemBuilder::def_print("minfilter", self.min_filter, Default::default(), w)?;
+        ElemBuilder::def_print("magfilter", self.mag_filter, Default::default(), w)?;
+        ElemBuilder::def_print("mipfilter", self.mip_filter, Default::default(), w)?;
+        opt(&self.border_color, |e| {
+            ElemBuilder::print_arr("border_color", &**e, w)
+        })?;
+        ElemBuilder::def_print("mipmap_maxlevel", self.mipmap_max_level, 0, w)?;
+        ElemBuilder::def_print("mipmap_bias", self.mipmap_bias, 0., w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
+    }
+}
+
 /// Wrap modes that affect the interpretation of `s`, `t`, and `p` texture coordinates in `Sampler*`
 /// elements.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -227,6 +294,25 @@ impl FromStr for WrapMode {
     }
 }
 
+impl WrapMode {
+    /// The XML name of a value in this enumeration.
+    pub fn to_str(self) -> &'static str {
+        match self {
+            Self::Wrap => "WRAP",
+            Self::Mirror => "MIRROR",
+            Self::Clamp => "CLAMP",
+            Self::Border => "BORDER",
+            Self::None => "NONE",
+        }
+    }
+}
+
+impl Display for WrapMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(self.to_str(), f)
+    }
+}
+
 /// (Undocumented?) Enumerated type `fx_sampler_filter_common` from COLLADA spec.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[allow(missing_docs)]
@@ -263,10 +349,33 @@ impl FromStr for SamplerFilter {
     }
 }
 
+impl SamplerFilter {
+    /// The XML name of a value in this enumeration.
+    pub fn to_str(self) -> &'static str {
+        match self {
+            Self::None => "NONE",
+            Self::Nearest => "NEAREST",
+            Self::Linear => "LINEAR",
+            Self::NearestMipmapNearest => "NEAREST_MIPMAP_NEAREST",
+            Self::LinearMipmapNearest => "LINEAR_MIPMAP_NEAREST",
+            Self::NearestMipmapLinear => "NEAREST_MIPMAP_LINEAR",
+            Self::LinearMipmapLinear => "LINEAR_MIPMAP_LINEAR",
+        }
+    }
+}
+
+impl Display for SamplerFilter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(self.to_str(), f)
+    }
+}
+
 /// Declares a resource that can be used both as the source for
 /// texture samples and as the target of a rendering pass.
 #[derive(Clone, Debug)]
 pub struct Surface {
+    /// The type of this surface.
+    pub ty: SurfaceType,
     /// An initialization option for this surface.
     pub init: SurfaceInit,
     /// Contains a string representing the texel format for this surface.
@@ -321,6 +430,7 @@ impl XNode for Surface {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
         let res = Surface {
+            ty: parse_attr(element.attr("type"))?.ok_or("expected 'type' attr")?,
             init: parse_one_many(&mut it, SurfaceInit::parse)?,
             format: parse_opt("format", &mut it, parse_text)?,
             format_hint: FormatHint::parse_opt_box(&mut it)?,
@@ -334,6 +444,95 @@ impl XNode for Surface {
             return Err("size and viewport_ratio cannot be used together".into());
         }
         Ok(res)
+    }
+}
+
+impl XNodeWrite for Surface {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.print_attr("type", &self.ty);
+        let e = e.start(w)?;
+        self.init.write_to(w)?;
+        opt(&self.format, |e| ElemBuilder::print_str("format", e, w))?;
+        self.format_hint.write_to(w)?;
+        opt(&self.size, |e| ElemBuilder::print_arr("size", &**e, w))?;
+        opt(&self.viewport_ratio, |e| {
+            ElemBuilder::print_arr("viewport_ratio", &**e, w)
+        })?;
+        ElemBuilder::def_print("mip_levels", self.mip_levels, 0, w)?;
+        ElemBuilder::def_print("mipmap_generate", self.mipmap_generate, false, w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
+    }
+}
+
+/// Specifies a surface on a cube.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SurfaceType {
+    /// When a surface’s type attribute is set to `Untyped`,
+    /// its type is initially unknown and established later by the context in which
+    /// it is used, such as by a texture sampler that references it.
+    /// A surface of any other type may be changed into an `Untyped` surface at
+    /// run-time, as if it were created by [`NewParam`], using [`EffectSetParam`].
+    /// If there is a type mismatch between a [`EffectSetParam`] operation and
+    /// what the run-time decides the type should be, the result is profile- and
+    /// platform-specific behavior.
+    Untyped,
+    /// A one dimensional texture.
+    _1D,
+    /// A two dimensional texture.
+    _2D,
+    /// A three dimensional texture.
+    _3D,
+    /// A RECT texture, see <http://www.opengl.org/registry/specs/ARB/texture_rectangle.txt>.
+    Rect,
+    /// A cube map.
+    Cube,
+    /// A depth map.
+    Depth,
+}
+
+impl Default for SurfaceType {
+    fn default() -> Self {
+        Self::Untyped
+    }
+}
+
+impl FromStr for SurfaceType {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "UNTYPED" => Ok(Self::Untyped),
+            "1D" => Ok(Self::_1D),
+            "2D" => Ok(Self::_2D),
+            "3D" => Ok(Self::_3D),
+            "RECT" => Ok(Self::Rect),
+            "CUBE" => Ok(Self::Cube),
+            "DEPTH" => Ok(Self::Depth),
+            _ => Err(()),
+        }
+    }
+}
+
+impl SurfaceType {
+    /// The XML name of a value in this enumeration.
+    pub fn to_str(self) -> &'static str {
+        match self {
+            Self::Untyped => "UNTYPED",
+            Self::_1D => "1D",
+            Self::_2D => "2D",
+            Self::_3D => "3D",
+            Self::Rect => "RECT",
+            Self::Cube => "CUBE",
+            Self::Depth => "DEPTH",
+        }
+    }
+}
+
+impl Display for SurfaceType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(self.to_str(), f)
     }
 }
 
@@ -366,6 +565,18 @@ impl XNode for FormatHint {
             options: parse_list("option", &mut it, parse_elem)?,
             extra: Extra::parse_many(it)?,
         })
+    }
+}
+
+impl XNodeWrite for FormatHint {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let e = Self::elem().start(w)?;
+        ElemBuilder::print("channels", &self.channels, w)?;
+        ElemBuilder::print("range", &self.range, w)?;
+        ElemBuilder::print("precision", &self.precision, w)?;
+        many(&self.options, |e| ElemBuilder::print("option", e, w))?;
+        self.extra.write_to(w)?;
+        e.end(w)
     }
 }
 
@@ -429,6 +640,29 @@ impl SurfaceInit {
     }
 }
 
+impl XNodeWrite for SurfaceInit {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        match self {
+            Self::Null => ElemBuilder::new("init_as_null").end(w),
+            Self::Target => ElemBuilder::new("init_as_target").end(w),
+            &Self::From {
+                mip,
+                slice,
+                face,
+                ref image,
+            } => {
+                let mut e = ElemBuilder::new("init_from");
+                e.def_print_attr("mip", mip, 0);
+                e.def_print_attr("slice", slice, 0);
+                e.def_print_attr("face", face, Default::default());
+                let e = e.start(w)?;
+                print_elem(image, w)?;
+                e.end(w)
+            }
+        }
+    }
+}
+
 /// Specifies a surface on a cube.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SurfaceFace {
@@ -465,6 +699,26 @@ impl FromStr for SurfaceFace {
             "NEGATIVE_Z" => Ok(Self::NegZ),
             _ => Err(()),
         }
+    }
+}
+
+impl SurfaceFace {
+    /// The XML name of a value in this enumeration.
+    pub fn to_str(self) -> &'static str {
+        match self {
+            Self::PosX => "POSITIVE_X",
+            Self::NegX => "NEGATIVE_X",
+            Self::PosY => "POSITIVE_Y",
+            Self::NegY => "NEGATIVE_Y",
+            Self::PosZ => "POSITIVE_Z",
+            Self::NegZ => "NEGATIVE_Z",
+        }
+    }
+}
+
+impl Display for SurfaceFace {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(self.to_str(), f)
     }
 }
 
@@ -507,6 +761,27 @@ impl FromStr for SurfaceChannels {
     }
 }
 
+impl SurfaceChannels {
+    /// The XML name of a value in this enumeration.
+    pub fn to_str(self) -> &'static str {
+        match self {
+            Self::RGB => "RGB",
+            Self::RGBA => "RGBA",
+            Self::L => "L",
+            Self::LA => "LA",
+            Self::D => "D",
+            Self::XYZ => "XYZ",
+            Self::XYZW => "XYZW",
+        }
+    }
+}
+
+impl Display for SurfaceChannels {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(self.to_str(), f)
+    }
+}
+
 /// The range of texel channel values. Each channel represents a range of values.
 /// Some example ranges are signed or unsigned integers, or
 /// are within a clamped range such as 0.0f to 1.0f, or are a
@@ -543,6 +818,26 @@ impl FromStr for SurfaceRange {
         }
     }
 }
+
+impl SurfaceRange {
+    /// The XML name of a value in this enumeration.
+    pub fn to_str(self) -> &'static str {
+        match self {
+            Self::SNorm => "SNORM",
+            Self::UNorm => "UNORM",
+            Self::SInt => "SINT",
+            Self::UInt => "UINT",
+            Self::Float => "FLOAT",
+        }
+    }
+}
+
+impl Display for SurfaceRange {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(self.to_str(), f)
+    }
+}
+
 /// The precision of the texel channel value.
 ///
 /// Each channel of the texel has a precision. Typically, channels have the same precision. An
@@ -571,6 +866,23 @@ impl FromStr for SurfacePrecision {
             "HIGH" => Ok(Self::High),
             _ => Err(()),
         }
+    }
+}
+
+impl SurfacePrecision {
+    /// The XML name of a value in this enumeration.
+    pub fn to_str(self) -> &'static str {
+        match self {
+            Self::Low => "LOW",
+            Self::Mid => "MID",
+            Self::High => "HIGH",
+        }
+    }
+}
+
+impl Display for SurfacePrecision {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(self.to_str(), f)
     }
 }
 
@@ -604,5 +916,23 @@ impl FromStr for SurfaceOption {
             "COMPRESSABLE" => Ok(Self::Compressible),
             _ => Err(()),
         }
+    }
+}
+
+impl SurfaceOption {
+    /// The XML name of a value in this enumeration.
+    pub fn to_str(self) -> &'static str {
+        match self {
+            Self::SrgbGamma => "SRGB_GAMMA",
+            Self::Normalized3 => "NORMALIZED3",
+            Self::Normalized4 => "NORMALIZED4",
+            Self::Compressible => "COMPRESSABLE",
+        }
+    }
+}
+
+impl Display for SurfaceOption {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(self.to_str(), f)
     }
 }

@@ -38,6 +38,17 @@ impl Profile {
     }
 }
 
+impl XNodeWrite for Profile {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        match self {
+            Self::Common(e) => e.write_to(w),
+            Self::CG(e) => e.write_to(w),
+            Self::GLES(e) => e.write_to(w),
+            Self::GLSL(e) => e.write_to(w),
+        }
+    }
+}
+
 /// Opens a block of platform-independent declarations for the common, fixed-function shader.
 #[derive(Clone, Debug)]
 pub struct ProfileCommon {
@@ -79,6 +90,18 @@ impl XNode for ProfileCommon {
     }
 }
 
+impl XNodeWrite for ProfileCommon {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let e = Self::elem().start(w)?;
+        self.asset.write_to(w)?;
+        self.image.write_to(w)?;
+        self.new_param.write_to(w)?;
+        self.technique.write_to(w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
+    }
+}
+
 impl ProfileCommon {
     /// Get a parameter by name, looking in the parameters to the technique,
     /// the parameters to the profile, and finally the parameters to the parent effect.
@@ -117,6 +140,13 @@ impl ProfileData for CommonData {
     }
 }
 
+impl XNodeWrite for CommonData {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        self.image_param.write_to(w)?;
+        self.shaders.write_to(w)
+    }
+}
+
 impl CommonData {
     /// Run the function `f` on all arguments of type [`Texture`] in the profile.
     pub fn on_textures<'a, E>(
@@ -142,15 +172,27 @@ impl XNode for ProfileCG {
     }
 }
 
+impl XNodeWrite for ProfileCG {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        XNodeWrite::write_to(&self.0, w)
+    }
+}
+
 /// The `<profile_GLES>` element and its contents are unsupported
 /// and represented here as a raw XML element.
 #[derive(Clone, Debug)]
 pub struct ProfileGLES(pub Element); // TODO
 
-impl ProfileGLES {
+impl XNode for ProfileGLES {
     const NAME: &'static str = "profile_GLES";
     fn parse(element: &Element) -> Result<Self> {
         Ok(ProfileGLES(element.clone()))
+    }
+}
+
+impl XNodeWrite for ProfileGLES {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        XNodeWrite::write_to(&self.0, w)
     }
 }
 
@@ -159,9 +201,15 @@ impl ProfileGLES {
 #[derive(Clone, Debug)]
 pub struct ProfileGLSL(pub Element); // TODO
 
-impl ProfileGLSL {
+impl XNode for ProfileGLSL {
     const NAME: &'static str = "profile_GLSL";
     fn parse(element: &Element) -> Result<Self> {
         Ok(ProfileGLSL(element.clone()))
+    }
+}
+
+impl XNodeWrite for ProfileGLSL {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        XNodeWrite::write_to(&self.0, w)
     }
 }

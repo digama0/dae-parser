@@ -29,6 +29,16 @@ impl XNode for Scene {
     }
 }
 
+impl XNodeWrite for Scene {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let e = Self::elem().start(w)?;
+        self.instance_physics_scene.write_to(w)?;
+        self.instance_visual_scene.write_to(w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
+    }
+}
+
 /// Embodies the entire set of information that can be visualized
 /// from the contents of a COLLADA resource.
 #[derive(Clone, Debug)]
@@ -64,6 +74,20 @@ impl XNode for VisualScene {
     }
 }
 
+impl XNodeWrite for VisualScene {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.opt_attr("id", &self.id);
+        e.opt_attr("name", &self.name);
+        let e = e.start(w)?;
+        self.asset.write_to(w)?;
+        self.nodes.write_to(w)?;
+        self.evaluate_scene.write_to(w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
+    }
+}
+
 /// Embodies the hierarchical relationship of elements in a scene.
 ///
 /// The [`Node`] element declares a point of interest in a scene.
@@ -75,6 +99,13 @@ pub struct Node {
     pub id: Option<String>,
     /// The text string name of this element.
     pub name: Option<String>,
+    /// A text string value containing the subidentifier of this element.
+    /// This value must be unique within the scope of the parent element.
+    pub sid: Option<String>,
+    /// The type of the [`Node`] element.
+    pub ty: NodeType,
+    /// The layers to which this node belongs.
+    pub layer: Vec<String>,
     /// Asset management information about this element.
     pub asset: Option<Box<Asset>>,
     /// Any combination of geometric transforms.
@@ -103,6 +134,11 @@ impl XNode for Node {
         Ok(Node {
             id: element.attr("id").map(Into::into),
             name: element.attr("name").map(Into::into),
+            sid: element.attr("sid").map(Into::into),
+            ty: parse_attr(element.attr("type"))?.unwrap_or_default(),
+            layer: element.attr("layer").map_or_else(Vec::new, |s| {
+                s.split_ascii_whitespace().map(|s| s.to_owned()).collect()
+            }),
             asset: Asset::parse_opt_box(&mut it)?,
             transforms: parse_list_many(&mut it, Transform::parse)?,
             instance_camera: Instance::parse_list(&mut it)?,
@@ -113,6 +149,34 @@ impl XNode for Node {
             children: Node::parse_list(&mut it)?,
             extra: Extra::parse_many(it)?,
         })
+    }
+}
+
+impl XNodeWrite for Node {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.opt_attr("id", &self.id);
+        e.opt_attr("name", &self.name);
+        e.opt_attr("sid", &self.sid);
+        e.def_print_attr("type", self.ty, Default::default());
+        if let Some(s) = arr_to_string(&self.layer) {
+            e.attr("layer", &s)
+        }
+        if self.is_empty() {
+            e.end(w)
+        } else {
+            let e = e.start(w)?;
+            self.asset.write_to(w)?;
+            self.transforms.write_to(w)?;
+            self.instance_camera.write_to(w)?;
+            self.instance_controller.write_to(w)?;
+            self.instance_geometry.write_to(w)?;
+            self.instance_light.write_to(w)?;
+            self.instance_node.write_to(w)?;
+            self.children.write_to(w)?;
+            self.extra.write_to(w)?;
+            e.end(w)
+        }
     }
 }
 
@@ -133,6 +197,19 @@ impl Node {
             child.on_children(f)?
         }
         Ok(())
+    }
+
+    /// Returns true if this node has no sub-elements.
+    pub fn is_empty(&self) -> bool {
+        self.asset.is_none()
+            && self.transforms.is_empty()
+            && self.instance_camera.is_empty()
+            && self.instance_controller.is_empty()
+            && self.instance_geometry.is_empty()
+            && self.instance_light.is_empty()
+            && self.instance_node.is_empty()
+            && self.children.is_empty()
+            && self.extra.is_empty()
     }
 }
 
@@ -181,6 +258,49 @@ impl Node {
     }
 }
 
+/// The type of a [`Node`] element.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NodeType {
+    /// A regular node.
+    Node,
+    /// A joint. See [`Joints`].
+    Joint,
+}
+
+impl Default for NodeType {
+    fn default() -> Self {
+        Self::Node
+    }
+}
+
+impl FromStr for NodeType {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "NODE" => Ok(Self::Node),
+            "JOINT" => Ok(Self::Joint),
+            _ => Err(()),
+        }
+    }
+}
+
+impl NodeType {
+    /// The XML name of a value in this enumeration.
+    pub fn to_str(self) -> &'static str {
+        match self {
+            Self::Node => "NODE",
+            Self::Joint => "JOINT",
+        }
+    }
+}
+
+impl Display for NodeType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(self.to_str(), f)
+    }
+}
+
 /// Declares information specifying how to evaluate a [`VisualScene`].
 #[derive(Clone, Debug)]
 pub struct EvaluateScene {
@@ -200,5 +320,15 @@ impl XNode for EvaluateScene {
             render: Render::parse_list_n::<1>(&mut it)?,
         };
         finish(res, it)
+    }
+}
+
+impl XNodeWrite for EvaluateScene {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.opt_attr("name", &self.name);
+        let e = e.start(w)?;
+        self.render.write_to(w)?;
+        e.end(w)
     }
 }

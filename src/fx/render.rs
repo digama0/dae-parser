@@ -29,6 +29,17 @@ impl XNode for Render {
     }
 }
 
+impl XNodeWrite for Render {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.print_attr("camera_node", &self.camera_node);
+        let e = e.start(w)?;
+        many(&self.layers, |e| ElemBuilder::print_str("layer", e, w))?;
+        self.instance_effect.write_to(w)?;
+        e.end(w)
+    }
+}
+
 /// A shader element.
 #[derive(Clone, Debug)]
 pub enum Shader {
@@ -61,10 +72,21 @@ impl Shader {
         f: &mut impl FnMut(&'a Texture) -> Result<(), E>,
     ) -> Result<(), E> {
         match self {
-            Shader::Blinn(s) => s.on_textures(f),
-            Shader::Constant(s) => s.on_textures(f),
-            Shader::Lambert(s) => s.on_textures(f),
-            Shader::Phong(s) => s.on_textures(f),
+            Self::Blinn(s) => s.on_textures(f),
+            Self::Constant(s) => s.on_textures(f),
+            Self::Lambert(s) => s.on_textures(f),
+            Self::Phong(s) => s.on_textures(f),
+        }
+    }
+}
+
+impl XNodeWrite for Shader {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        match self {
+            Self::Blinn(e) => e.write_to(w),
+            Self::Constant(e) => e.write_to(w),
+            Self::Lambert(e) => e.write_to(w),
+            Self::Phong(e) => e.write_to(w),
         }
     }
 }
@@ -114,6 +136,23 @@ impl XNode for Blinn {
             transparency: parse_opt("transparency", &mut it, FloatParam::parse)?,
             index_of_refraction: parse_opt("index_of_refraction", &mut it, FloatParam::parse)?,
         })
+    }
+}
+
+impl XNodeWrite for Blinn {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let e = Self::elem().start(w)?;
+        ColorParam::write_opt(&self.emission, "emission", w)?;
+        ColorParam::write_opt(&self.ambient, "ambient", w)?;
+        ColorParam::write_opt(&self.diffuse, "diffuse", w)?;
+        ColorParam::write_opt(&self.specular, "specular", w)?;
+        FloatParam::write_opt(&self.shininess, "shininess", w)?;
+        ColorParam::write_opt(&self.reflective, "reflective", w)?;
+        FloatParam::write_opt(&self.reflectivity, "reflectivity", w)?;
+        ColorParam::write_opt(&self.transparent, "transparent", w)?;
+        FloatParam::write_opt(&self.transparency, "transparency", w)?;
+        FloatParam::write_opt(&self.index_of_refraction, "index_of_refraction", w)?;
+        e.end(w)
     }
 }
 
@@ -168,6 +207,19 @@ impl XNode for ConstantFx {
     }
 }
 
+impl XNodeWrite for ConstantFx {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let e = Self::elem().start(w)?;
+        ColorParam::write_opt(&self.emission, "emission", w)?;
+        ColorParam::write_opt(&self.reflective, "reflective", w)?;
+        FloatParam::write_opt(&self.reflectivity, "reflectivity", w)?;
+        ColorParam::write_opt(&self.transparent, "transparent", w)?;
+        FloatParam::write_opt(&self.transparency, "transparency", w)?;
+        FloatParam::write_opt(&self.index_of_refraction, "index_of_refraction", w)?;
+        e.end(w)
+    }
+}
+
 impl ConstantFx {
     /// Run the function `f` on all arguments of type [`Texture`] in the parameters to this shader.
     pub fn on_textures<'a, E>(
@@ -219,6 +271,21 @@ impl XNode for Lambert {
             transparency: parse_opt("transparency", &mut it, FloatParam::parse)?,
             index_of_refraction: parse_opt("index_of_refraction", &mut it, FloatParam::parse)?,
         })
+    }
+}
+
+impl XNodeWrite for Lambert {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let e = Self::elem().start(w)?;
+        ColorParam::write_opt(&self.emission, "emission", w)?;
+        ColorParam::write_opt(&self.ambient, "ambient", w)?;
+        ColorParam::write_opt(&self.diffuse, "diffuse", w)?;
+        ColorParam::write_opt(&self.reflective, "reflective", w)?;
+        FloatParam::write_opt(&self.reflectivity, "reflectivity", w)?;
+        ColorParam::write_opt(&self.transparent, "transparent", w)?;
+        FloatParam::write_opt(&self.transparency, "transparency", w)?;
+        FloatParam::write_opt(&self.index_of_refraction, "index_of_refraction", w)?;
+        e.end(w)
     }
 }
 
@@ -285,6 +352,23 @@ impl XNode for Phong {
     }
 }
 
+impl XNodeWrite for Phong {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let e = Self::elem().start(w)?;
+        ColorParam::write_opt(&self.emission, "emission", w)?;
+        ColorParam::write_opt(&self.ambient, "ambient", w)?;
+        ColorParam::write_opt(&self.diffuse, "diffuse", w)?;
+        ColorParam::write_opt(&self.specular, "specular", w)?;
+        FloatParam::write_opt(&self.shininess, "shininess", w)?;
+        ColorParam::write_opt(&self.reflective, "reflective", w)?;
+        FloatParam::write_opt(&self.reflectivity, "reflectivity", w)?;
+        ColorParam::write_opt(&self.transparent, "transparent", w)?;
+        FloatParam::write_opt(&self.transparency, "transparency", w)?;
+        FloatParam::write_opt(&self.index_of_refraction, "index_of_refraction", w)?;
+        e.end(w)
+    }
+}
+
 impl Phong {
     /// Run the function `f` on all arguments of type [`Texture`] in the parameters to this shader.
     pub fn on_textures<'a, E>(
@@ -342,6 +426,28 @@ impl ColorParam {
             _ => None,
         }
     }
+
+    fn write_opt(this: &Option<Self>, name: &str, w: &mut XWriter<impl Write>) -> Result<()> {
+        opt(this, |this| {
+            let elem = ElemBuilder::new(name).start(w)?;
+            this.write_to(w)?;
+            elem.end(w)
+        })
+    }
+}
+
+impl XNodeWrite for ColorParam {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        match self {
+            Self::Color(arr) => ElemBuilder::print_arr("color", &**arr, w),
+            Self::Param(ref_) => {
+                let mut e = ElemBuilder::new(Param::NAME);
+                e.attr("ref", ref_);
+                e.end(w)
+            }
+            Self::Texture(e) => e.write_to(w),
+        }
+    }
 }
 
 /// A type that describes the scalar attributes of fixed-function shader elements inside
@@ -366,6 +472,27 @@ impl FloatParam {
                 _ => return Ok(None),
             }))
         })
+    }
+
+    fn write_opt(this: &Option<Self>, name: &str, w: &mut XWriter<impl Write>) -> Result<()> {
+        opt(this, |this| {
+            let elem = ElemBuilder::new(name).start(w)?;
+            this.write_to(w)?;
+            elem.end(w)
+        })
+    }
+}
+
+impl XNodeWrite for FloatParam {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        match self {
+            Self::Float(val) => ElemBuilder::print("float", val, w),
+            Self::Param(ref_) => {
+                let mut e = ElemBuilder::new(Param::NAME);
+                e.attr("ref", ref_);
+                e.end(w)
+            }
+        }
     }
 }
 
@@ -392,6 +519,21 @@ impl XNode for Texture {
             extra: Extra::parse_opt_box(&mut it)?,
         };
         finish(res, it)
+    }
+}
+
+impl XNodeWrite for Texture {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.attr("texture", &self.texture);
+        e.attr("texcoord", &self.texcoord);
+        if let Some(extra) = &self.extra {
+            let e = e.start(w)?;
+            extra.write_to(w)?;
+            e.end(w)
+        } else {
+            e.end(w)
+        }
     }
 }
 

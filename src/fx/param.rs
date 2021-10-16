@@ -32,6 +32,19 @@ impl XNode for NewParam {
     }
 }
 
+impl XNodeWrite for NewParam {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.attr("sid", &self.sid);
+        let e = e.start(w)?;
+        self.annotate.write_to(w)?;
+        opt(&self.semantic, |e| ElemBuilder::print_str("semantic", e, w))?;
+        ElemBuilder::opt_print("modifier", &self.modifier, w)?;
+        self.ty.write_to(w)?;
+        e.end(w)
+    }
+}
+
 /// Assigns a new value to a previously defined parameter.
 ///
 /// This type corresponds to the `<setparam>` element in the COLLADA spec
@@ -59,6 +72,16 @@ impl XNode for EffectSetParam {
     }
 }
 
+impl XNodeWrite for EffectSetParam {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.attr("ref", &self.ref_);
+        let e = e.start(w)?;
+        self.value.write_to(w)?;
+        e.end(w)
+    }
+}
+
 /// Adds a strongly typed annotation remark to the parent object.
 #[derive(Clone, Debug)]
 pub struct Annotate {
@@ -81,6 +104,16 @@ impl XNode for Annotate {
             value: parse_one_many(&mut it, AnnotType::parse)?,
         };
         finish(res, it)
+    }
+}
+
+impl XNodeWrite for Annotate {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.attr("name", &self.name);
+        let e = e.start(w)?;
+        self.value.write_to(w)?;
+        e.end(w)
     }
 }
 
@@ -166,6 +199,28 @@ impl AnnotType {
     }
 }
 
+impl XNodeWrite for AnnotType {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        match self {
+            AnnotType::Bool(e) => ElemBuilder::print("bool", e, w),
+            AnnotType::Bool2(e) => ElemBuilder::print_arr("bool2", e, w),
+            AnnotType::Bool3(e) => ElemBuilder::print_arr("bool3", e, w),
+            AnnotType::Bool4(e) => ElemBuilder::print_arr("bool4", e, w),
+            AnnotType::Int(e) => ElemBuilder::print("int", e, w),
+            AnnotType::Int2(e) => ElemBuilder::print_arr("int2", e, w),
+            AnnotType::Int3(e) => ElemBuilder::print_arr("int3", &**e, w),
+            AnnotType::Int4(e) => ElemBuilder::print_arr("int4", &**e, w),
+            AnnotType::Float(e) => ElemBuilder::print("float", e, w),
+            AnnotType::Float2(e) => ElemBuilder::print_arr("float2", e, w),
+            AnnotType::Float3(e) => ElemBuilder::print_arr("float3", &**e, w),
+            AnnotType::Float4(e) => ElemBuilder::print_arr("float4", &**e, w),
+            AnnotType::Float2x2(e) => ElemBuilder::print_arr("float2x2", &**e, w),
+            AnnotType::Float3x3(e) => ElemBuilder::print_arr("float3x3", &**e, w),
+            AnnotType::Float4x4(e) => ElemBuilder::print_arr("float4x4", &**e, w),
+            AnnotType::String(e) => ElemBuilder::print_str("string", e, w),
+        }
+    }
+}
 /// A parameter's type. We do not have full support here,
 /// but unknown types can be retrieved in the `Other` variant.
 #[derive(Clone, Debug)]
@@ -213,6 +268,20 @@ impl ParamType {
         match self {
             ParamType::Sampler2D(s) => Some(s),
             _ => None,
+        }
+    }
+}
+
+impl XNodeWrite for ParamType {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        match self {
+            ParamType::Float(e) => ElemBuilder::print("float", e, w),
+            ParamType::Float2(e) => ElemBuilder::print_arr("float2", e, w),
+            ParamType::Float3(e) => ElemBuilder::print_arr("float3", &**e, w),
+            ParamType::Float4(e) => ElemBuilder::print_arr("float4", &**e, w),
+            ParamType::Surface(e) => e.write_to(w),
+            ParamType::Sampler2D(e) => e.write_to(w),
+            ParamType::Other(e) => XNodeWrite::write_to(e, w),
         }
     }
 }

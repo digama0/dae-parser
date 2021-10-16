@@ -36,6 +36,22 @@ impl XNode for Light {
     }
 }
 
+impl XNodeWrite for Light {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.opt_attr("id", &self.id);
+        e.opt_attr("name", &self.name);
+        let e = e.start(w)?;
+        self.asset.write_to(w)?;
+        let common = ElemBuilder::new(Technique::COMMON).start(w)?;
+        self.kind.write_to(w)?;
+        common.end(w)?;
+        self.technique.write_to(w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
+    }
+}
+
 /// The kind of light being described.
 #[derive(Clone, Debug)]
 pub enum LightKind {
@@ -62,6 +78,17 @@ impl LightKind {
     }
 }
 
+impl XNodeWrite for LightKind {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        match self {
+            LightKind::Ambient(e) => e.write_to(w),
+            LightKind::Directional(e) => e.write_to(w),
+            LightKind::Point(e) => e.write_to(w),
+            LightKind::Spot(e) => e.write_to(w),
+        }
+    }
+}
+
 /// Describes an ambient light source.
 #[derive(Clone, Debug)]
 pub struct AmbientLight {
@@ -76,6 +103,14 @@ impl XNode for AmbientLight {
         let mut it = element.children().peekable();
         let color = parse_one("color", &mut it, parse_array_n)?;
         finish(AmbientLight { color }, it)
+    }
+}
+
+impl XNodeWrite for AmbientLight {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let e = Self::elem().start(w)?;
+        ElemBuilder::print_arr("color", &*self.color, w)?;
+        e.end(w)
     }
 }
 
@@ -98,6 +133,14 @@ impl XNode for DirectionalLight {
         let mut it = element.children().peekable();
         let color = parse_one("color", &mut it, parse_array_n)?;
         finish(DirectionalLight { color }, it)
+    }
+}
+
+impl XNodeWrite for DirectionalLight {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let e = Self::elem().start(w)?;
+        ElemBuilder::print_arr("color", &*self.color, w)?;
+        e.end(w)
     }
 }
 
@@ -137,6 +180,17 @@ impl XNode for PointLight {
                 .unwrap_or(0.),
         };
         finish(res, it)
+    }
+}
+
+impl XNodeWrite for PointLight {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let e = Self::elem().start(w)?;
+        ElemBuilder::print_arr("color", &*self.color, w)?;
+        ElemBuilder::def_print("constant_attenuation", self.constant_attenuation, 0., w)?;
+        ElemBuilder::def_print("linear_attenuation", self.linear_attenuation, 0., w)?;
+        ElemBuilder::def_print("quadratic_attenuation", self.quadratic_attenuation, 0., w)?;
+        e.end(w)
     }
 }
 
@@ -188,5 +242,18 @@ impl XNode for SpotLight {
             falloff_exponent: parse_opt("falloff_exponent", &mut it, parse_elem)?.unwrap_or(0.),
         };
         finish(res, it)
+    }
+}
+
+impl XNodeWrite for SpotLight {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let e = Self::elem().start(w)?;
+        ElemBuilder::print_arr("color", &*self.color, w)?;
+        ElemBuilder::def_print("constant_attenuation", self.constant_attenuation, 0., w)?;
+        ElemBuilder::def_print("linear_attenuation", self.linear_attenuation, 0., w)?;
+        ElemBuilder::def_print("quadratic_attenuation", self.quadratic_attenuation, 0., w)?;
+        ElemBuilder::def_print("falloff_angle", self.falloff_angle, 180., w)?;
+        ElemBuilder::def_print("falloff_exponent", self.falloff_exponent, 0., w)?;
+        e.end(w)
     }
 }

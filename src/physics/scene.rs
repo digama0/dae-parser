@@ -41,6 +41,24 @@ impl XNode for PhysicsScene {
     }
 }
 
+impl XNodeWrite for PhysicsScene {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.opt_attr("id", &self.id);
+        e.opt_attr("name", &self.name);
+        let e = e.start(w)?;
+        self.asset.write_to(w)?;
+        self.instance_force_field.write_to(w)?;
+        self.instance_physics_model.write_to(w)?;
+        let common = ElemBuilder::new(Technique::COMMON).start(w)?;
+        self.common.write_to(w)?;
+        common.end(w)?;
+        self.technique.write_to(w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
+    }
+}
+
 /// Specifies physics-scene information for the common profile
 /// that all COLLADA implementations must support.
 #[derive(Clone, Default, Debug)]
@@ -65,6 +83,15 @@ impl PhysicsSceneCommon {
             time_step: parse_opt("time_step", &mut it, parse_elem)?,
         };
         finish(res, it)
+    }
+}
+
+impl XNodeWrite for PhysicsSceneCommon {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        opt(&self.gravity, |e| {
+            ElemBuilder::print_arr("gravity", &**e, w)
+        })?;
+        ElemBuilder::opt_print("time_step", &self.time_step, w)
     }
 }
 
@@ -102,6 +129,19 @@ impl XNode for ForceField {
     }
 }
 
+impl XNodeWrite for ForceField {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.opt_attr("id", &self.id);
+        e.opt_attr("name", &self.name);
+        let e = e.start(w)?;
+        self.asset.write_to(w)?;
+        self.technique.write_to(w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
+    }
+}
+
 /// Defines an attachment frame, to a rigid body or a node, within a rigid constraint.
 #[derive(Clone, Debug)]
 pub struct Attachment {
@@ -117,7 +157,20 @@ pub struct Attachment {
 impl Attachment {
     /// The name of the `<ref_attachment>` element.
     pub const REF: &'static str = "ref_attachment";
+
+    pub(crate) fn write_inner<W: Write>(
+        &self,
+        mut e: ElemBuilder,
+        w: &mut XWriter<W>,
+    ) -> Result<()> {
+        e.print_attr("rigid_body", &self.rigid_body);
+        let e = e.start(w)?;
+        self.transform.write_to(w)?;
+        self.extra.write_to(w)?;
+        e.end(w)
+    }
 }
+
 impl XNode for Attachment {
     const NAME: &'static str = "attachment";
     fn parse(element: &Element) -> Result<Self> {
@@ -128,5 +181,11 @@ impl XNode for Attachment {
             transform: parse_list_many(&mut it, RigidTransform::parse)?,
             extra: Extra::parse_many(it)?,
         })
+    }
+}
+
+impl XNodeWrite for Attachment {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        self.write_inner(Self::elem(), w)
     }
 }
