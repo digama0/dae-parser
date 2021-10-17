@@ -15,7 +15,7 @@ pub trait InputKind {
 
 /// A trait for [`Source`] readers, which are used via the [`SourceReader`]
 /// type returned from [`Source::reader`]. Users can implement this trait
-/// on their own type to customize reading, or use [`Source::new_xyz`] and [`Source::new_st`]
+/// on their own type to customize reading, or use [`XYZ`] and [`ST`]
 /// for the common cases.
 pub trait SourceRead<K: InputKind + ?Sized>: Sized {
     /// The output value. This must be `Clone` because outputs are reused in some mesh kinds,
@@ -30,7 +30,7 @@ pub trait SourceRead<K: InputKind + ?Sized>: Sized {
     fn load(&self, data: &[<K::Array as ArrayKind>::Elem]) -> Self::Output;
 }
 
-/// The output of [`SourceRead::map`].
+/// The output of [`SourceReader::map`].
 #[derive(Copy, Clone, Debug)]
 pub struct Map<R, F> {
     reader: R,
@@ -72,7 +72,8 @@ pub struct SourceReader<'a, K: InputKind, R = <K as InputKind>::Reader> {
 impl Source {
     /// Construct a new [`SourceReader`] for this source, which can be used to access elements
     /// of the stored array. The input reader can be a user struct, or one of the pre-built readers
-    /// [`XYZReader`] and [`STReader`] (see [`Self::new_xyz`] and [`Self::new_st`]).
+    /// [`XYZReader`] and [`STReader`] by passing the marker types
+    /// [`XYZ`] or [`ST`] to [`Source::reader`].
     pub fn reader<K: InputKind>(&self, kind: K) -> Option<SourceReader<'_, K>> {
         let arr = self.array.as_ref()?;
         if matches!((arr.id(), &self.accessor.source), (Some(id), Url::Fragment(s)) if s == id) {

@@ -95,28 +95,28 @@ impl XNodeWrite for Shader {
 #[derive(Clone, Default, Debug)]
 pub struct Blinn {
     /// Declares the amount of light emitted from the surface of this object.
-    pub emission: Option<ColorParam>,
+    pub emission: Option<WithSid<ColorParam>>,
     /// Declares the amount of ambient light emitted from the surface of this object.
-    pub ambient: Option<ColorParam>,
+    pub ambient: Option<WithSid<ColorParam>>,
     /// Declares the amount of light diffusely reflected from the surface of this object.
-    pub diffuse: Option<ColorParam>,
+    pub diffuse: Option<WithSid<ColorParam>>,
     /// Declares the color of light specularly reflected from the surface of this object.
-    pub specular: Option<ColorParam>,
+    pub specular: Option<WithSid<ColorParam>>,
     /// Declares the specularity or roughness of the specular reflection lobe.
-    pub shininess: Option<FloatParam>,
+    pub shininess: Option<WithSid<FloatParam>>,
     /// Declares the color of a perfect mirror reflection.
-    pub reflective: Option<ColorParam>,
+    pub reflective: Option<WithSid<ColorParam>>,
     /// Declares the amount of perfect mirror reflection to be added
     /// to the reflected light as a value between 0.0 and 1.0.
-    pub reflectivity: Option<FloatParam>,
+    pub reflectivity: Option<WithSid<FloatParam>>,
     /// Declares the color of perfectly refracted light.
-    pub transparent: Option<ColorParam>,
+    pub transparent: Option<WithSid<ColorParam>>,
     /// Declares the amount of perfectly refracted light added
     /// to the reflected color as a scalar value between 0.0 and 1.0.
-    pub transparency: Option<FloatParam>,
+    pub transparency: Option<WithSid<FloatParam>>,
     /// Declares the index of refraction for perfectly refracted light
     /// as a single scalar index.
-    pub index_of_refraction: Option<FloatParam>,
+    pub index_of_refraction: Option<WithSid<FloatParam>>,
 }
 
 impl XNode for Blinn {
@@ -125,16 +125,16 @@ impl XNode for Blinn {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
         Ok(Blinn {
-            emission: parse_opt("emission", &mut it, ColorParam::parse)?,
-            ambient: parse_opt("ambient", &mut it, ColorParam::parse)?,
-            diffuse: parse_opt("diffuse", &mut it, ColorParam::parse)?,
-            specular: parse_opt("specular", &mut it, ColorParam::parse)?,
-            shininess: parse_opt("shininess", &mut it, FloatParam::parse)?,
-            reflective: parse_opt("reflective", &mut it, ColorParam::parse)?,
-            reflectivity: parse_opt("reflectivity", &mut it, FloatParam::parse)?,
-            transparent: parse_opt("transparent", &mut it, ColorParam::parse)?,
-            transparency: parse_opt("transparency", &mut it, FloatParam::parse)?,
-            index_of_refraction: parse_opt("index_of_refraction", &mut it, FloatParam::parse)?,
+            emission: parse_opt("emission", &mut it, WithSid::parse)?,
+            ambient: parse_opt("ambient", &mut it, WithSid::parse)?,
+            diffuse: parse_opt("diffuse", &mut it, WithSid::parse)?,
+            specular: parse_opt("specular", &mut it, WithSid::parse)?,
+            shininess: parse_opt("shininess", &mut it, WithSid::parse)?,
+            reflective: parse_opt("reflective", &mut it, WithSid::parse)?,
+            reflectivity: parse_opt("reflectivity", &mut it, WithSid::parse)?,
+            transparent: parse_opt("transparent", &mut it, WithSid::parse)?,
+            transparency: parse_opt("transparency", &mut it, WithSid::parse)?,
+            index_of_refraction: parse_opt("index_of_refraction", &mut it, WithSid::parse)?,
         })
     }
 }
@@ -142,16 +142,16 @@ impl XNode for Blinn {
 impl XNodeWrite for Blinn {
     fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
         let e = Self::elem().start(w)?;
-        ColorParam::write_opt(&self.emission, "emission", w)?;
-        ColorParam::write_opt(&self.ambient, "ambient", w)?;
-        ColorParam::write_opt(&self.diffuse, "diffuse", w)?;
-        ColorParam::write_opt(&self.specular, "specular", w)?;
-        FloatParam::write_opt(&self.shininess, "shininess", w)?;
-        ColorParam::write_opt(&self.reflective, "reflective", w)?;
-        FloatParam::write_opt(&self.reflectivity, "reflectivity", w)?;
-        ColorParam::write_opt(&self.transparent, "transparent", w)?;
-        FloatParam::write_opt(&self.transparency, "transparency", w)?;
-        FloatParam::write_opt(&self.index_of_refraction, "index_of_refraction", w)?;
+        WithSid::write_opt(&self.emission, "emission", w)?;
+        WithSid::write_opt(&self.ambient, "ambient", w)?;
+        WithSid::write_opt(&self.diffuse, "diffuse", w)?;
+        WithSid::write_opt(&self.specular, "specular", w)?;
+        WithSid::write_opt(&self.shininess, "shininess", w)?;
+        WithSid::write_opt(&self.reflective, "reflective", w)?;
+        WithSid::write_opt(&self.reflectivity, "reflectivity", w)?;
+        WithSid::write_opt(&self.transparent, "transparent", w)?;
+        WithSid::write_opt(&self.transparency, "transparency", w)?;
+        WithSid::write_opt(&self.index_of_refraction, "index_of_refraction", w)?;
         e.end(w)
     }
 }
@@ -175,20 +175,20 @@ impl Blinn {
 #[derive(Clone, Default, Debug)]
 pub struct ConstantFx {
     /// Declares the amount of light emitted from the surface of this object.
-    pub emission: Option<ColorParam>,
+    pub emission: Option<WithSid<ColorParam>>,
     /// Declares the color of a perfect mirror reflection.
-    pub reflective: Option<ColorParam>,
+    pub reflective: Option<WithSid<ColorParam>>,
     /// Declares the amount of perfect mirror reflection to be added
     /// to the reflected light as a value between 0.0 and 1.0.
-    pub reflectivity: Option<FloatParam>,
+    pub reflectivity: Option<WithSid<FloatParam>>,
     /// Declares the color of perfectly refracted light.
-    pub transparent: Option<ColorParam>,
+    pub transparent: Option<WithSid<ColorParam>>,
     /// Declares the amount of perfectly refracted light added
     /// to the reflected color as a scalar value between 0.0 and 1.0.
-    pub transparency: Option<FloatParam>,
+    pub transparency: Option<WithSid<FloatParam>>,
     /// Declares the index of refraction for perfectly refracted light
     /// as a single scalar index.
-    pub index_of_refraction: Option<FloatParam>,
+    pub index_of_refraction: Option<WithSid<FloatParam>>,
 }
 
 impl XNode for ConstantFx {
@@ -197,12 +197,12 @@ impl XNode for ConstantFx {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
         Ok(ConstantFx {
-            emission: parse_opt("emission", &mut it, ColorParam::parse)?,
-            reflective: parse_opt("reflective", &mut it, ColorParam::parse)?,
-            reflectivity: parse_opt("reflectivity", &mut it, FloatParam::parse)?,
-            transparent: parse_opt("transparent", &mut it, ColorParam::parse)?,
-            transparency: parse_opt("transparency", &mut it, FloatParam::parse)?,
-            index_of_refraction: parse_opt("index_of_refraction", &mut it, FloatParam::parse)?,
+            emission: parse_opt("emission", &mut it, WithSid::parse)?,
+            reflective: parse_opt("reflective", &mut it, WithSid::parse)?,
+            reflectivity: parse_opt("reflectivity", &mut it, WithSid::parse)?,
+            transparent: parse_opt("transparent", &mut it, WithSid::parse)?,
+            transparency: parse_opt("transparency", &mut it, WithSid::parse)?,
+            index_of_refraction: parse_opt("index_of_refraction", &mut it, WithSid::parse)?,
         })
     }
 }
@@ -210,12 +210,12 @@ impl XNode for ConstantFx {
 impl XNodeWrite for ConstantFx {
     fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
         let e = Self::elem().start(w)?;
-        ColorParam::write_opt(&self.emission, "emission", w)?;
-        ColorParam::write_opt(&self.reflective, "reflective", w)?;
-        FloatParam::write_opt(&self.reflectivity, "reflectivity", w)?;
-        ColorParam::write_opt(&self.transparent, "transparent", w)?;
-        FloatParam::write_opt(&self.transparency, "transparency", w)?;
-        FloatParam::write_opt(&self.index_of_refraction, "index_of_refraction", w)?;
+        WithSid::write_opt(&self.emission, "emission", w)?;
+        WithSid::write_opt(&self.reflective, "reflective", w)?;
+        WithSid::write_opt(&self.reflectivity, "reflectivity", w)?;
+        WithSid::write_opt(&self.transparent, "transparent", w)?;
+        WithSid::write_opt(&self.transparency, "transparency", w)?;
+        WithSid::write_opt(&self.index_of_refraction, "index_of_refraction", w)?;
         e.end(w)
     }
 }
@@ -236,24 +236,24 @@ impl ConstantFx {
 #[derive(Clone, Default, Debug)]
 pub struct Lambert {
     /// Declares the amount of light emitted from the surface of this object.
-    pub emission: Option<ColorParam>,
+    pub emission: Option<WithSid<ColorParam>>,
     /// Declares the amount of ambient light emitted from the surface of this object.
-    pub ambient: Option<ColorParam>,
+    pub ambient: Option<WithSid<ColorParam>>,
     /// Declares the amount of light diffusely reflected from the surface of this object.
-    pub diffuse: Option<ColorParam>,
+    pub diffuse: Option<WithSid<ColorParam>>,
     /// Declares the color of a perfect mirror reflection.
-    pub reflective: Option<ColorParam>,
+    pub reflective: Option<WithSid<ColorParam>>,
     /// Declares the amount of perfect mirror reflection to be added
     /// to the reflected light as a value between 0.0 and 1.0.
-    pub reflectivity: Option<FloatParam>,
+    pub reflectivity: Option<WithSid<FloatParam>>,
     /// Declares the color of perfectly refracted light.
-    pub transparent: Option<ColorParam>,
+    pub transparent: Option<WithSid<ColorParam>>,
     /// Declares the amount of perfectly refracted light added
     /// to the reflected color as a scalar value between 0.0 and 1.0.
-    pub transparency: Option<FloatParam>,
+    pub transparency: Option<WithSid<FloatParam>>,
     /// Declares the index of refraction for perfectly refracted light
     /// as a single scalar index.
-    pub index_of_refraction: Option<FloatParam>,
+    pub index_of_refraction: Option<WithSid<FloatParam>>,
 }
 
 impl XNode for Lambert {
@@ -262,14 +262,14 @@ impl XNode for Lambert {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
         Ok(Lambert {
-            emission: parse_opt("emission", &mut it, ColorParam::parse)?,
-            ambient: parse_opt("ambient", &mut it, ColorParam::parse)?,
-            diffuse: parse_opt("diffuse", &mut it, ColorParam::parse)?,
-            reflective: parse_opt("reflective", &mut it, ColorParam::parse)?,
-            reflectivity: parse_opt("reflectivity", &mut it, FloatParam::parse)?,
-            transparent: parse_opt("transparent", &mut it, ColorParam::parse)?,
-            transparency: parse_opt("transparency", &mut it, FloatParam::parse)?,
-            index_of_refraction: parse_opt("index_of_refraction", &mut it, FloatParam::parse)?,
+            emission: parse_opt("emission", &mut it, WithSid::parse)?,
+            ambient: parse_opt("ambient", &mut it, WithSid::parse)?,
+            diffuse: parse_opt("diffuse", &mut it, WithSid::parse)?,
+            reflective: parse_opt("reflective", &mut it, WithSid::parse)?,
+            reflectivity: parse_opt("reflectivity", &mut it, WithSid::parse)?,
+            transparent: parse_opt("transparent", &mut it, WithSid::parse)?,
+            transparency: parse_opt("transparency", &mut it, WithSid::parse)?,
+            index_of_refraction: parse_opt("index_of_refraction", &mut it, WithSid::parse)?,
         })
     }
 }
@@ -277,14 +277,14 @@ impl XNode for Lambert {
 impl XNodeWrite for Lambert {
     fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
         let e = Self::elem().start(w)?;
-        ColorParam::write_opt(&self.emission, "emission", w)?;
-        ColorParam::write_opt(&self.ambient, "ambient", w)?;
-        ColorParam::write_opt(&self.diffuse, "diffuse", w)?;
-        ColorParam::write_opt(&self.reflective, "reflective", w)?;
-        FloatParam::write_opt(&self.reflectivity, "reflectivity", w)?;
-        ColorParam::write_opt(&self.transparent, "transparent", w)?;
-        FloatParam::write_opt(&self.transparency, "transparency", w)?;
-        FloatParam::write_opt(&self.index_of_refraction, "index_of_refraction", w)?;
+        WithSid::write_opt(&self.emission, "emission", w)?;
+        WithSid::write_opt(&self.ambient, "ambient", w)?;
+        WithSid::write_opt(&self.diffuse, "diffuse", w)?;
+        WithSid::write_opt(&self.reflective, "reflective", w)?;
+        WithSid::write_opt(&self.reflectivity, "reflectivity", w)?;
+        WithSid::write_opt(&self.transparent, "transparent", w)?;
+        WithSid::write_opt(&self.transparency, "transparency", w)?;
+        WithSid::write_opt(&self.index_of_refraction, "index_of_refraction", w)?;
         e.end(w)
     }
 }
@@ -308,28 +308,28 @@ impl Lambert {
 #[derive(Clone, Default, Debug)]
 pub struct Phong {
     /// Declares the amount of light emitted from the surface of this object.
-    pub emission: Option<ColorParam>,
+    pub emission: Option<WithSid<ColorParam>>,
     /// Declares the amount of ambient light emitted from the surface of this object.
-    pub ambient: Option<ColorParam>,
+    pub ambient: Option<WithSid<ColorParam>>,
     /// Declares the amount of light diffusely reflected from the surface of this object.
-    pub diffuse: Option<ColorParam>,
+    pub diffuse: Option<WithSid<ColorParam>>,
     /// the surface of this object.  the surface of this object.
-    pub specular: Option<ColorParam>,
+    pub specular: Option<WithSid<ColorParam>>,
     /// reflection lobe.reflection lobe.
-    pub shininess: Option<FloatParam>,
+    pub shininess: Option<WithSid<FloatParam>>,
     /// Declares the color of a perfect mirror reflection.
-    pub reflective: Option<ColorParam>,
+    pub reflective: Option<WithSid<ColorParam>>,
     /// Declares the amount of perfect mirror reflection to be added
     /// to the reflected light as a value between 0.0 and 1.0.
-    pub reflectivity: Option<FloatParam>,
+    pub reflectivity: Option<WithSid<FloatParam>>,
     /// Declares the color of perfectly refracted light.
-    pub transparent: Option<ColorParam>,
+    pub transparent: Option<WithSid<ColorParam>>,
     /// Declares the amount of perfectly refracted light added
     /// to the reflected color as a scalar value between 0.0 and 1.0.
-    pub transparency: Option<FloatParam>,
+    pub transparency: Option<WithSid<FloatParam>>,
     /// Declares the index of refraction for perfectly refracted light
     /// as a single scalar index.
-    pub index_of_refraction: Option<FloatParam>,
+    pub index_of_refraction: Option<WithSid<FloatParam>>,
 }
 
 impl XNode for Phong {
@@ -338,16 +338,16 @@ impl XNode for Phong {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
         Ok(Phong {
-            emission: parse_opt("emission", &mut it, ColorParam::parse)?,
-            ambient: parse_opt("ambient", &mut it, ColorParam::parse)?,
-            diffuse: parse_opt("diffuse", &mut it, ColorParam::parse)?,
-            specular: parse_opt("specular", &mut it, ColorParam::parse)?,
-            shininess: parse_opt("shininess", &mut it, FloatParam::parse)?,
-            reflective: parse_opt("reflective", &mut it, ColorParam::parse)?,
-            reflectivity: parse_opt("reflectivity", &mut it, FloatParam::parse)?,
-            transparent: parse_opt("transparent", &mut it, ColorParam::parse)?,
-            transparency: parse_opt("transparency", &mut it, FloatParam::parse)?,
-            index_of_refraction: parse_opt("index_of_refraction", &mut it, FloatParam::parse)?,
+            emission: parse_opt("emission", &mut it, WithSid::parse)?,
+            ambient: parse_opt("ambient", &mut it, WithSid::parse)?,
+            diffuse: parse_opt("diffuse", &mut it, WithSid::parse)?,
+            specular: parse_opt("specular", &mut it, WithSid::parse)?,
+            shininess: parse_opt("shininess", &mut it, WithSid::parse)?,
+            reflective: parse_opt("reflective", &mut it, WithSid::parse)?,
+            reflectivity: parse_opt("reflectivity", &mut it, WithSid::parse)?,
+            transparent: parse_opt("transparent", &mut it, WithSid::parse)?,
+            transparency: parse_opt("transparency", &mut it, WithSid::parse)?,
+            index_of_refraction: parse_opt("index_of_refraction", &mut it, WithSid::parse)?,
         })
     }
 }
@@ -355,16 +355,16 @@ impl XNode for Phong {
 impl XNodeWrite for Phong {
     fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
         let e = Self::elem().start(w)?;
-        ColorParam::write_opt(&self.emission, "emission", w)?;
-        ColorParam::write_opt(&self.ambient, "ambient", w)?;
-        ColorParam::write_opt(&self.diffuse, "diffuse", w)?;
-        ColorParam::write_opt(&self.specular, "specular", w)?;
-        FloatParam::write_opt(&self.shininess, "shininess", w)?;
-        ColorParam::write_opt(&self.reflective, "reflective", w)?;
-        FloatParam::write_opt(&self.reflectivity, "reflectivity", w)?;
-        ColorParam::write_opt(&self.transparent, "transparent", w)?;
-        FloatParam::write_opt(&self.transparency, "transparency", w)?;
-        FloatParam::write_opt(&self.index_of_refraction, "index_of_refraction", w)?;
+        WithSid::write_opt(&self.emission, "emission", w)?;
+        WithSid::write_opt(&self.ambient, "ambient", w)?;
+        WithSid::write_opt(&self.diffuse, "diffuse", w)?;
+        WithSid::write_opt(&self.specular, "specular", w)?;
+        WithSid::write_opt(&self.shininess, "shininess", w)?;
+        WithSid::write_opt(&self.reflective, "reflective", w)?;
+        WithSid::write_opt(&self.reflectivity, "reflectivity", w)?;
+        WithSid::write_opt(&self.transparent, "transparent", w)?;
+        WithSid::write_opt(&self.transparency, "transparency", w)?;
+        WithSid::write_opt(&self.index_of_refraction, "index_of_refraction", w)?;
         e.end(w)
     }
 }
@@ -384,6 +384,58 @@ impl Phong {
     }
 }
 
+/// A struct that attaches an optional SID to a shader parameter.
+#[derive(Clone, Default, Debug)]
+pub struct WithSid<T> {
+    sid: Option<String>,
+    data: T,
+}
+
+impl<T> Deref for WithSid<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+
+pub(crate) use private::CanWithSid;
+pub(crate) mod private {
+    use super::*;
+    pub trait CanWithSid: XNodeWrite + Sized {
+        fn parse(element: &Element) -> Result<Option<Self>>;
+
+        fn write_with_sid<W: Write>(&self, sid: &Option<String>, w: &mut XWriter<W>) -> Result<()>;
+    }
+}
+
+impl<T: CanWithSid> WithSid<T> {
+    /// Parse a [`WithSid<T>`] from an XML element.
+    pub fn parse(element: &Element) -> Result<Self> {
+        let mut it = element.children().peekable();
+        parse_one_many(&mut it, |e| {
+            Ok(T::parse(e)?.map(|data| Self {
+                sid: e.attr("sid").map(Into::into),
+                data,
+            }))
+        })
+    }
+
+    fn write_opt(this: &Option<Self>, name: &str, w: &mut XWriter<impl Write>) -> Result<()> {
+        opt(this, |this| {
+            let elem = ElemBuilder::new(name).start(w)?;
+            this.write_to(w)?;
+            elem.end(w)
+        })
+    }
+}
+
+impl<T: CanWithSid> XNodeWrite for WithSid<T> {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        self.data.write_with_sid(&self.sid, w)
+    }
+}
+
 /// A type that describes color attributes of fixed-function shader elements inside
 /// [`ProfileCommon`] effects.
 #[derive(Clone, Debug)]
@@ -397,20 +449,43 @@ pub enum ColorParam {
     Texture(Box<Texture>),
 }
 
-impl ColorParam {
-    /// Parse a [`ColorParam`] from an XML element.
-    pub fn parse(element: &Element) -> Result<Self> {
-        let mut it = element.children().peekable();
-        parse_one_many(&mut it, |e| {
-            Ok(Some(match e.name() {
-                "color" => Self::Color(parse_array_n(e)?),
-                Param::NAME => Self::Param(e.attr("ref").ok_or("expected ref attr")?.into()),
-                Texture::NAME => Self::Texture(Texture::parse_box(e)?),
-                _ => return Ok(None),
-            }))
-        })
+impl CanWithSid for ColorParam {
+    fn parse(e: &Element) -> Result<Option<Self>> {
+        Ok(Some(match e.name() {
+            "color" => Self::Color(parse_array_n(e)?),
+            Param::NAME => Self::Param(e.attr("ref").ok_or("expected ref attr")?.into()),
+            Texture::NAME => Self::Texture(Texture::parse_box(e)?),
+            _ => return Ok(None),
+        }))
     }
 
+    fn write_with_sid<W: Write>(&self, sid: &Option<String>, w: &mut XWriter<W>) -> Result<()> {
+        match self {
+            Self::Color(arr) => {
+                let mut e = ElemBuilder::new("color");
+                e.opt_attr("sid", sid);
+                let e = e.start(w)?;
+                print_arr(&**arr, w)?;
+                e.end(w)
+            }
+            Self::Param(ref_) => {
+                let mut e = ElemBuilder::new(Param::NAME);
+                e.opt_attr("sid", sid);
+                e.attr("ref", ref_);
+                e.end(w)
+            }
+            Self::Texture(e) => e.write_to(w),
+        }
+    }
+}
+
+impl XNodeWrite for ColorParam {
+    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
+        self.write_with_sid(&None, w)
+    }
+}
+
+impl ColorParam {
     /// Convert this parameter to a texture reference, if it is one.
     pub fn as_texture(&self) -> Option<&Texture> {
         match self {
@@ -426,28 +501,6 @@ impl ColorParam {
             _ => None,
         }
     }
-
-    fn write_opt(this: &Option<Self>, name: &str, w: &mut XWriter<impl Write>) -> Result<()> {
-        opt(this, |this| {
-            let elem = ElemBuilder::new(name).start(w)?;
-            this.write_to(w)?;
-            elem.end(w)
-        })
-    }
-}
-
-impl XNodeWrite for ColorParam {
-    fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
-        match self {
-            Self::Color(arr) => ElemBuilder::print_arr("color", &**arr, w),
-            Self::Param(ref_) => {
-                let mut e = ElemBuilder::new(Param::NAME);
-                e.attr("ref", ref_);
-                e.end(w)
-            }
-            Self::Texture(e) => e.write_to(w),
-        }
-    }
 }
 
 /// A type that describes the scalar attributes of fixed-function shader elements inside
@@ -461,38 +514,37 @@ pub enum FloatParam {
     Param(Box<str>),
 }
 
-impl FloatParam {
-    /// Parse a [`FloatParam`] from an XML element.
-    pub fn parse(element: &Element) -> Result<Self> {
-        let mut it = element.children().peekable();
-        parse_one_many(&mut it, |e| {
-            Ok(Some(match e.name() {
-                "float" => Self::Float(parse_elem(e)?),
-                Param::NAME => Self::Param(e.attr("ref").ok_or("expected ref attr")?.into()),
-                _ => return Ok(None),
-            }))
-        })
+impl CanWithSid for FloatParam {
+    fn parse(e: &Element) -> Result<Option<Self>> {
+        Ok(Some(match e.name() {
+            "float" => Self::Float(parse_elem(e)?),
+            Param::NAME => Self::Param(e.attr("ref").ok_or("expected ref attr")?.into()),
+            _ => return Ok(None),
+        }))
     }
 
-    fn write_opt(this: &Option<Self>, name: &str, w: &mut XWriter<impl Write>) -> Result<()> {
-        opt(this, |this| {
-            let elem = ElemBuilder::new(name).start(w)?;
-            this.write_to(w)?;
-            elem.end(w)
-        })
+    fn write_with_sid<W: Write>(&self, sid: &Option<String>, w: &mut XWriter<W>) -> Result<()> {
+        match self {
+            Self::Float(val) => {
+                let mut e = ElemBuilder::new("float");
+                e.opt_attr("sid", sid);
+                let e = e.start(w)?;
+                print_elem(val, w)?;
+                e.end(w)
+            }
+            Self::Param(ref_) => {
+                let mut e = ElemBuilder::new(Param::NAME);
+                e.opt_attr("sid", sid);
+                e.attr("ref", ref_);
+                e.end(w)
+            }
+        }
     }
 }
 
 impl XNodeWrite for FloatParam {
     fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
-        match self {
-            Self::Float(val) => ElemBuilder::print("float", val, w),
-            Self::Param(ref_) => {
-                let mut e = ElemBuilder::new(Param::NAME);
-                e.attr("ref", ref_);
-                e.end(w)
-            }
-        }
+        self.write_with_sid(&None, w)
     }
 }
 
@@ -507,6 +559,22 @@ pub struct Texture {
     pub texcoord: String,
     /// Provides arbitrary additional information about this element.
     pub extra: Option<Box<Extra>>,
+}
+
+impl Texture {
+    fn write_with_sid<W: Write>(&self, sid: &Option<String>, w: &mut XWriter<W>) -> Result<()> {
+        let mut e = Self::elem();
+        e.opt_attr("sid", sid);
+        e.attr("texture", &self.texture);
+        e.attr("texcoord", &self.texcoord);
+        if let Some(extra) = &self.extra {
+            let e = e.start(w)?;
+            extra.write_to(w)?;
+            e.end(w)
+        } else {
+            e.end(w)
+        }
+    }
 }
 
 impl XNode for Texture {
@@ -524,24 +592,19 @@ impl XNode for Texture {
 
 impl XNodeWrite for Texture {
     fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
-        let mut e = Self::elem();
-        e.attr("texture", &self.texture);
-        e.attr("texcoord", &self.texcoord);
-        if let Some(extra) = &self.extra {
-            let e = e.start(w)?;
-            extra.write_to(w)?;
-            e.end(w)
-        } else {
-            e.end(w)
-        }
+        self.write_with_sid(&None, w)
     }
 }
 
 fn on_color_as_texture<'a, E>(
-    opt: &'a Option<ColorParam>,
+    opt: &'a Option<WithSid<ColorParam>>,
     f: &mut impl FnMut(&'a Texture) -> Result<(), E>,
 ) -> Result<(), E> {
-    if let Some(ColorParam::Texture(tex)) = opt {
+    if let Some(WithSid {
+        data: ColorParam::Texture(tex),
+        ..
+    }) = opt
+    {
         f(tex)?
     }
     Ok(())
