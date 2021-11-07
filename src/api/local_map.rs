@@ -40,7 +40,7 @@ impl Document {
     /// See [`LocalMaps::default`] and [`LocalMaps::set`] for a builder API
     /// which allows you to pick which types you are interested in,
     /// or [`LocalMaps::new`] and [`LocalMaps::unset`] to exclude certain types.
-    pub fn local_maps<T: Traversable + HasId + ?Sized>(&self) -> LocalMaps<'_> {
+    pub fn local_maps(&self) -> LocalMaps<'_> {
         LocalMaps::new().collect(self)
     }
 }
