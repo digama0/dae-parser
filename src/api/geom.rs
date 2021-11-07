@@ -37,6 +37,23 @@ pub struct VertexImporter<'a> {
     texcoord: Option<SourceReader<'a, ST>>,
 }
 
+impl<'a> VertexImporter<'a> {
+    /// Get the importer for position data.
+    pub fn position_importer(&self) -> Option<&SourceReader<'a, XYZ>> {
+        self.position.as_ref()
+    }
+
+    /// Get the importer for normal data.
+    pub fn normal_importer(&self) -> Option<&SourceReader<'a, XYZ>> {
+        self.normal.as_ref()
+    }
+
+    /// Get the importer for texture coordinate data.
+    pub fn texcoord_importer(&self) -> Option<&SourceReader<'a, ST>> {
+        self.texcoord.as_ref()
+    }
+}
+
 fn load<'a, K: InputKind + Default, R: UrlResolver<'a, Source>>(
     res: &R,
     input: &Input,
