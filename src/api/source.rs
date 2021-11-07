@@ -144,7 +144,7 @@ impl<'a, K: InputKind, R: SourceRead<K>> ExactSizeIterator for SourceReader<'a, 
 
 impl<'a, K: InputKind, R: SourceRead<K>> DoubleEndedIterator for SourceReader<'a, K, R> {
     fn next_back(&mut self) -> Option<Self::Item> {
-        self.len = self.len.checked_sub(1)? * self.stride;
+        self.len = self.len.checked_sub(1)?;
         let (left, right) = self.array.split_at(self.len);
         self.array = left;
         Some(self.reader.load(right))
@@ -160,7 +160,7 @@ impl<'a, K: InputKind, R: SourceRead<K>> Iterator for SourceReader<'a, K, R> {
     type Item = R::Output;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.len = self.len.checked_sub(1)? * self.stride;
+        self.len = self.len.checked_sub(1)?;
         let (left, right) = self.array.split_at(self.stride);
         self.array = right;
         Some(self.reader.load(left))
