@@ -188,6 +188,30 @@ impl<'a> Importer<'a> {
         vtx
     }
 
+    /// Get the importer for normal data.
+    pub fn normal_importer(&self) -> Option<&SourceReader<'a, XYZ>> {
+        let mut importer = self.vimp.normal_importer();
+        for inst in &self.insts {
+            if let Instruction::Normal(imp) = &inst.1 {
+                importer = Some(imp)
+            }
+        }
+        importer
+    }
+
+    /// Get the importer for texture coordinate data.
+    pub fn texcoord_importer(&self, set: u32) -> Option<&SourceReader<'a, ST>> {
+        let mut importer = self.vimp.texcoord_importer();
+        for inst in &self.insts {
+            if let Instruction::TexCoord(imp, i) = &inst.1 {
+                if i.map_or(true, |i| i == set) {
+                    importer = Some(imp)
+                }
+            }
+        }
+        importer
+    }
+
     /// Construct a new vertex iterator from some user context `C` (can be `()`),
     /// and an array coming from one of the `prim` fields:
     /// * [`LineGeom::prim`]
@@ -268,7 +292,7 @@ impl<'a, 'b, C: ?Sized, V: VertexLoad<'a, C>> ExactSizeIterator for ArrayIter<'a
 
 impl<'a, 'b, C: ?Sized, V: VertexLoad<'a, C>> DoubleEndedIterator for ArrayIter<'a, 'b, C, V> {
     fn next_back(&mut self) -> Option<Self::Item> {
-        self.len = self.len.checked_sub(1)? * self.imp.stride;
+        self.len = self.len.checked_sub(1)?;
         let (left, right) = self.array.split_at(self.len);
         self.array = left;
         Some(self.imp.build_vertex(self.ctx, right))
@@ -284,7 +308,7 @@ impl<'a, 'b, C: ?Sized, V: VertexLoad<'a, C>> Iterator for ArrayIter<'a, 'b, C, 
     type Item = V;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.len = self.len.checked_sub(1)? * self.imp.stride;
+        self.len = self.len.checked_sub(1)?;
         let (left, right) = self.array.split_at(self.imp.stride);
         self.array = right;
         Some(self.imp.build_vertex(self.ctx, left))
