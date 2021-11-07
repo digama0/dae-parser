@@ -185,7 +185,7 @@ mk_libraries! {
     #[derive(Traversable, CollectLocalMaps)]
     ForceFields(ForceField) = "library_force_fields",
 
-    #[derive(Traversable, CollectLocalMaps)]
+    #[derive(Traversable)]
     Geometries(Geometry) = "library_geometries",
 
     #[derive(Traversable, CollectLocalMaps)]

@@ -43,6 +43,13 @@ impl XNodeWrite for Geometry {
     }
 }
 
+impl CollectLocalMaps for Geometry {
+    fn collect_local_maps<'a>(&'a self, maps: &mut LocalMaps<'a>) {
+        maps.insert(self);
+        self.element.collect_local_maps(maps);
+    }
+}
+
 /// Extra data associated to [`Instance`]<[`Geometry`]>.
 #[derive(Clone, Debug)]
 pub struct InstanceGeometryData {
@@ -97,6 +104,16 @@ pub enum GeometryElement {
     Mesh(Mesh),
     /// A multisegment spline.
     Spline(Spline),
+}
+
+impl CollectLocalMaps for GeometryElement {
+    fn collect_local_maps<'a>(&'a self, maps: &mut LocalMaps<'a>) {
+        match self {
+            GeometryElement::ConvexHullOf(_) => {}
+            GeometryElement::Mesh(mesh) => mesh.sources.collect_local_maps(maps),
+            GeometryElement::Spline(spline) => spline.sources.collect_local_maps(maps),
+        }
+    }
 }
 
 impl GeometryElement {
