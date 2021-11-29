@@ -21,6 +21,42 @@ pub enum Transform {
     Translate(Translate),
 }
 
+impl From<LookAt> for Transform {
+    fn from(v: LookAt) -> Self {
+        Self::LookAt(v)
+    }
+}
+
+impl From<Matrix> for Transform {
+    fn from(v: Matrix) -> Self {
+        Self::Matrix(v)
+    }
+}
+
+impl From<Rotate> for Transform {
+    fn from(v: Rotate) -> Self {
+        Self::Rotate(v)
+    }
+}
+
+impl From<Scale> for Transform {
+    fn from(v: Scale) -> Self {
+        Self::Scale(v)
+    }
+}
+
+impl From<Skew> for Transform {
+    fn from(v: Skew) -> Self {
+        Self::Skew(v)
+    }
+}
+
+impl From<Translate> for Transform {
+    fn from(v: Translate) -> Self {
+        Self::Translate(v)
+    }
+}
+
 impl Transform {
     /// Parse a [`Transform`] from an XML element.
     pub fn parse(e: &Element) -> Result<Option<Self>> {
@@ -90,6 +126,27 @@ pub enum RigidTransform {
     Translate(Translate),
     /// A rotation.
     Rotate(Rotate),
+}
+
+impl From<Translate> for RigidTransform {
+    fn from(v: Translate) -> Self {
+        Self::Translate(v)
+    }
+}
+
+impl From<Rotate> for RigidTransform {
+    fn from(v: Rotate) -> Self {
+        Self::Rotate(v)
+    }
+}
+
+impl From<RigidTransform> for Transform {
+    fn from(tr: RigidTransform) -> Self {
+        match tr {
+            RigidTransform::Translate(v) => v.into(),
+            RigidTransform::Rotate(v) => v.into(),
+        }
+    }
 }
 
 impl RigidTransform {
@@ -165,6 +222,14 @@ impl XNodeWrite for LookAt {
 }
 
 impl LookAt {
+    /// Construct a look-at transform from the given eye position,
+    /// target position, and up direction.
+    pub fn new(eye: [f32; 3], target: [f32; 3], up: [f32; 3]) -> Self {
+        Self(Box::new([
+            eye[0], eye[1], eye[2], target[0], target[1], target[2], up[0], up[1], up[2],
+        ]))
+    }
+
     /// The eye position for this look-at orientation.
     #[inline]
     pub fn eye(&self) -> &[f32; 3] {
@@ -218,10 +283,29 @@ impl XNodeWrite for Matrix {
 }
 
 impl Matrix {
+    /// Construct a matrix transform from a column order 4x4 matrix.
+    pub fn new(data: [f32; 16]) -> Self {
+        Self(Box::new(data))
+    }
+
     #[cfg(feature = "nalgebra")]
     /// Convert this transformation to a [`nalgebra::Matrix4`].
     pub fn as_matrix(&self) -> Matrix4<f32> {
         Matrix4::from_column_slice(&*self.0)
+    }
+}
+
+#[cfg(feature = "nalgebra")]
+impl From<Matrix4<f32>> for Matrix {
+    fn from(mat: Matrix4<f32>) -> Self {
+        Self(Box::new(mat.as_slice().try_into().expect("impossible")))
+    }
+}
+
+#[cfg(feature = "nalgebra")]
+impl From<Matrix4<f32>> for Transform {
+    fn from(mat: Matrix4<f32>) -> Self {
+        Self::Matrix(mat.into())
     }
 }
 
@@ -249,6 +333,11 @@ impl XNodeWrite for Rotate {
 }
 
 impl Rotate {
+    /// Construct a new axis-angle transformation.
+    pub fn new(axis: [f32; 3], angle: f32) -> Self {
+        Self(Box::new([axis[0], axis[1], axis[2], angle]))
+    }
+
     /// The rotation axis of this rotation transform.
     pub fn axis(&self) -> &[f32; 3] {
         self.0[0..3].try_into().unwrap()
@@ -290,6 +379,16 @@ impl XNodeWrite for Scale {
 }
 
 impl Scale {
+    /// Construct a new nonuniform scale transformation.
+    pub fn new(val: [f32; 3]) -> Self {
+        Self(Box::new(val))
+    }
+
+    /// Construct a new uniform scale transformation.
+    pub fn uniform(val: f32) -> Self {
+        Self::new([val, val, val])
+    }
+
     #[cfg(feature = "nalgebra")]
     /// Convert this transformation to a [`nalgebra::Matrix4`].
     pub fn as_matrix(&self) -> Matrix4<f32> {
@@ -333,6 +432,13 @@ impl XNodeWrite for Skew {
 }
 
 impl Skew {
+    /// Construct a new skew transformation from the given parameters.
+    pub fn new(angle: f32, axis: [f32; 3], trans: [f32; 3]) -> Self {
+        Self(Box::new([
+            angle, axis[0], axis[1], axis[2], trans[0], trans[1], trans[2],
+        ]))
+    }
+
     /// The angle of this skew transformation.
     #[inline]
     pub fn angle(&self) -> f32 {
@@ -394,6 +500,11 @@ impl XNodeWrite for Translate {
 }
 
 impl Translate {
+    /// Construct a new translation from the given parameters.
+    pub fn new(val: [f32; 3]) -> Self {
+        Self(Box::new(val))
+    }
+
     #[cfg(feature = "nalgebra")]
     /// Convert this transformation to a [`nalgebra::Matrix4`].
     pub fn as_matrix(&self) -> Matrix4<f32> {

@@ -31,6 +31,23 @@ pub struct Image {
     pub extra: Vec<Extra>,
 }
 
+impl Image {
+    /// Construct a new `Image` from the given source.
+    pub fn new(id: impl Into<String>, name: Option<String>, source: ImageSource) -> Self {
+        Self {
+            id: Some(id.into()),
+            name,
+            format: None,
+            height: 0,
+            width: 0,
+            depth: 1,
+            asset: None,
+            source,
+            extra: vec![],
+        }
+    }
+}
+
 impl XNode for Image {
     const NAME: &'static str = "image";
     fn parse(element: &Element) -> Result<Self> {
@@ -74,6 +91,12 @@ pub enum ImageParam {
     NewParam(NewParam),
     /// An [`Image`] element.
     Image(Image),
+}
+
+impl From<Image> for ImageParam {
+    fn from(v: Image) -> Self {
+        Self::Image(v)
+    }
 }
 
 impl ImageParam {
@@ -199,6 +222,24 @@ pub struct Sampler2D {
     pub mipmap_bias: f32,
     /// Provides arbitrary additional information about this element.
     pub extra: Vec<Extra>,
+}
+
+impl Sampler2D {
+    /// Construct a new `Sampler2D` from a source.
+    pub fn new(source: String) -> Self {
+        Self {
+            source: Ref::new(source),
+            wrap_s: Default::default(),
+            wrap_t: Default::default(),
+            min_filter: Default::default(),
+            mag_filter: Default::default(),
+            mip_filter: Default::default(),
+            border_color: None,
+            mipmap_max_level: 0,
+            mipmap_bias: 0.,
+            extra: vec![],
+        }
+    }
 }
 
 impl XNode for Sampler2D {
@@ -424,6 +465,23 @@ pub struct Surface {
     pub extra: Vec<Extra>,
 }
 
+impl Surface {
+    /// Construct a new `Surface` from mandatory parameters.
+    pub fn new(ty: SurfaceType, init: SurfaceInit) -> Self {
+        Self {
+            ty,
+            init,
+            format: None,
+            format_hint: None,
+            size: None,
+            viewport_ratio: None,
+            mip_levels: 0,
+            mipmap_generate: false,
+            extra: vec![],
+        }
+    }
+}
+
 impl XNode for Surface {
     const NAME: &'static str = "surface";
     fn parse(element: &Element) -> Result<Self> {
@@ -553,6 +611,23 @@ pub struct FormatHint {
     pub extra: Vec<Extra>,
 }
 
+impl FormatHint {
+    /// Construct a new `FormatHint`.
+    pub fn new(
+        channels: SurfaceChannels,
+        range: SurfaceRange,
+        precision: SurfacePrecision,
+    ) -> Self {
+        Self {
+            channels,
+            range,
+            precision,
+            options: vec![],
+            extra: vec![],
+        }
+    }
+}
+
 impl XNode for FormatHint {
     const NAME: &'static str = "format_hint";
     fn parse(element: &Element) -> Result<Self> {
@@ -623,6 +698,15 @@ pub enum SurfaceInit {
 }
 
 impl SurfaceInit {
+    /// Construct a `SurfaceInit::From` variant with default arguments.
+    pub fn init_from(image: impl Into<String>) -> Self {
+        Self::From {
+            mip: 0,
+            slice: 0,
+            face: Default::default(),
+            image: Ref::new(image.into()),
+        }
+    }
     /// Parse a [`SurfaceInit`] from an XML element.
     pub fn parse(element: &Element) -> Result<Option<Self>> {
         Ok(Some(match element.name() {

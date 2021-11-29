@@ -4,7 +4,7 @@ use crate::*;
 ///
 /// It contains a technique/profile with parameters.
 /// The `COMMON` profile defines the built-in names, such as `static_friction`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct PhysicsMaterial {
     /// A text string containing the unique identifier of the element.
     pub id: Option<String>,
@@ -19,6 +19,20 @@ pub struct PhysicsMaterial {
     pub technique: Vec<Technique>,
     /// Provides arbitrary additional information about this element.
     pub extra: Vec<Extra>,
+}
+
+impl PhysicsMaterial {
+    /// Build a `PhysicsMaterial` with default options.
+    pub fn new(id: impl Into<String>) -> Self {
+        Self {
+            id: Some(id.into()),
+            name: None,
+            asset: None,
+            common: Default::default(),
+            technique: vec![],
+            extra: vec![],
+        }
+    }
 }
 
 impl XNode for PhysicsMaterial {
@@ -55,7 +69,7 @@ impl XNodeWrite for PhysicsMaterial {
 
 /// Specifies physics-material information for the common
 /// profile that all COLLADA implementations must support.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Default, Debug)]
 pub struct PhysicsMaterialCommon {
     /// Contains a floating-point number that specifies the dynamic friction coefficient.
     pub dynamic_friction: f32,

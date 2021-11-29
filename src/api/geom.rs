@@ -128,7 +128,7 @@ impl<T> Geom<T> {
         Ok(Importer {
             vimp,
             vtx_offset,
-            stride: self.inputs.depth,
+            stride: self.inputs.stride,
             insts,
         })
     }

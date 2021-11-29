@@ -17,6 +17,30 @@ pub enum Profile {
     GLSL(ProfileGLSL),
 }
 
+impl From<ProfileCommon> for Profile {
+    fn from(v: ProfileCommon) -> Self {
+        Self::Common(v)
+    }
+}
+
+impl From<ProfileCG> for Profile {
+    fn from(v: ProfileCG) -> Self {
+        Self::CG(v)
+    }
+}
+
+impl From<ProfileGLES> for Profile {
+    fn from(v: ProfileGLES) -> Self {
+        Self::GLES(v)
+    }
+}
+
+impl From<ProfileGLSL> for Profile {
+    fn from(v: ProfileGLSL) -> Self {
+        Self::GLSL(v)
+    }
+}
+
 impl Profile {
     /// Parse a [`Profile`] from an XML element.
     pub fn parse(e: &Element) -> Result<Option<Self>> {
@@ -103,6 +127,17 @@ impl XNodeWrite for ProfileCommon {
 }
 
 impl ProfileCommon {
+    /// Construct a new `ProfileCommon` from the `TechniqueFx` data.
+    pub fn new(technique: TechniqueFx<CommonData>) -> Self {
+        Self {
+            asset: None,
+            image: vec![],
+            new_param: vec![],
+            technique,
+            extra: vec![],
+        }
+    }
+
     /// Get a parameter by name, looking in the parameters to the technique,
     /// the parameters to the profile, and finally the parameters to the parent effect.
     pub fn get_param<'a>(&'a self, parent: &'a Effect, sid: &str) -> Option<&'a NewParam> {
@@ -148,6 +183,14 @@ impl XNodeWrite for CommonData {
 }
 
 impl CommonData {
+    /// Construct a simple `CommonData` with one shader.
+    pub fn shader(shader: impl Into<Shader>) -> Self {
+        Self {
+            image_param: vec![],
+            shaders: vec![shader.into()],
+        }
+    }
+
     /// Run the function `f` on all arguments of type [`Texture`] in the profile.
     pub fn on_textures<'a, E>(
         &'a self,

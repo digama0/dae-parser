@@ -16,6 +16,19 @@ pub struct NewParam {
     pub ty: ParamType,
 }
 
+impl NewParam {
+    /// Create a `NewParam` with the given name and type.
+    pub fn new(sid: impl Into<String>, ty: impl Into<ParamType>) -> Self {
+        Self {
+            sid: sid.into(),
+            annotate: vec![],
+            semantic: None,
+            modifier: None,
+            ty: ty.into(),
+        }
+    }
+}
+
 impl XNode for NewParam {
     const NAME: &'static str = "newparam";
     fn parse(element: &Element) -> Result<Self> {
@@ -59,6 +72,16 @@ pub struct EffectSetParam {
     pub value: AnnotType,
 }
 
+impl EffectSetParam {
+    /// Construct a new `EffectSetParam` with the given name and type.
+    pub fn new(ref_: impl Into<String>, value: impl Into<AnnotType>) -> Self {
+        Self {
+            ref_: ref_.into(),
+            value: value.into(),
+        }
+    }
+}
+
 impl XNode for EffectSetParam {
     const NAME: &'static str = "setparam";
     fn parse(element: &Element) -> Result<Self> {
@@ -92,6 +115,16 @@ pub struct Annotate {
     /// the form SYMBOL = VALUE. Consists of a COLLADA type
     /// element that contains a value of that type.
     pub value: AnnotType,
+}
+
+impl Annotate {
+    /// Construct a new annotation with the given name and typed value.
+    pub fn new(name: impl Into<String>, value: impl Into<AnnotType>) -> Self {
+        Self {
+            name: name.into(),
+            value: value.into(),
+        }
+    }
 }
 
 impl XNode for Annotate {
@@ -174,6 +207,36 @@ pub enum AnnotType {
     String(Box<str>),
 }
 
+impl From<&str> for AnnotType {
+    fn from(v: &str) -> Self {
+        Self::String(v.into())
+    }
+}
+
+impl From<Box<str>> for AnnotType {
+    fn from(v: Box<str>) -> Self {
+        Self::String(v)
+    }
+}
+
+impl From<bool> for AnnotType {
+    fn from(v: bool) -> Self {
+        Self::Bool(v)
+    }
+}
+
+impl From<f32> for AnnotType {
+    fn from(v: f32) -> Self {
+        Self::Float(v)
+    }
+}
+
+impl From<u32> for AnnotType {
+    fn from(v: u32) -> Self {
+        Self::Int(v)
+    }
+}
+
 impl AnnotType {
     /// Parse a [`AnnotType`] from an XML element.
     pub fn parse(e: &Element) -> Result<Option<Self>> {
@@ -239,6 +302,12 @@ pub enum ParamType {
     Sampler2D(Box<Sampler2D>),
     /// Any other type, stored as a raw XML element.
     Other(Box<Element>),
+}
+
+impl From<f32> for ParamType {
+    fn from(v: f32) -> Self {
+        Self::Float(v)
+    }
 }
 
 impl ParamType {

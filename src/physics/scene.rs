@@ -1,7 +1,7 @@
 use crate::*;
 
 /// Specifies an environment in which physical objects are instantiated and simulated.
-#[derive(Clone, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct PhysicsScene {
     /// A text string containing the unique identifier of the element.
     pub id: Option<String>,
@@ -155,6 +155,15 @@ pub struct Attachment {
 }
 
 impl Attachment {
+    /// Construct an attachment to a [`RigidBody`] or [`Node`].
+    pub fn new(rigid_body: Url) -> Self {
+        Self {
+            rigid_body,
+            transform: vec![],
+            extra: vec![],
+        }
+    }
+
     /// The name of the `<ref_attachment>` element.
     pub const REF: &'static str = "ref_attachment";
 

@@ -17,6 +17,20 @@ pub struct Light {
     pub extra: Vec<Extra>,
 }
 
+impl Light {
+    /// Construct a new `Light` with the given name and kind.
+    pub fn new(id: impl Into<String>, name: Option<String>, kind: impl Into<LightKind>) -> Self {
+        Self {
+            id: Some(id.into()),
+            name,
+            asset: None,
+            kind: kind.into(),
+            technique: vec![],
+            extra: vec![],
+        }
+    }
+}
+
 impl XNode for Light {
     const NAME: &'static str = "light";
     fn parse(element: &Element) -> Result<Self> {
@@ -65,6 +79,30 @@ pub enum LightKind {
     Spot(Box<SpotLight>),
 }
 
+impl From<SpotLight> for LightKind {
+    fn from(v: SpotLight) -> Self {
+        Self::Spot(Box::new(v))
+    }
+}
+
+impl From<PointLight> for LightKind {
+    fn from(v: PointLight) -> Self {
+        Self::Point(Box::new(v))
+    }
+}
+
+impl From<DirectionalLight> for LightKind {
+    fn from(v: DirectionalLight) -> Self {
+        Self::Directional(v)
+    }
+}
+
+impl From<AmbientLight> for LightKind {
+    fn from(v: AmbientLight) -> Self {
+        Self::Ambient(v)
+    }
+}
+
 impl LightKind {
     /// Parse a [`LightKind`] from an XML element.
     pub fn parse(e: &Element) -> Result<Option<Self>> {
@@ -96,6 +134,15 @@ pub struct AmbientLight {
     pub color: Box<[f32; 3]>,
 }
 
+impl AmbientLight {
+    /// Create a new `AmbientLight` with the given color.
+    pub fn new(color: [f32; 3]) -> Self {
+        Self {
+            color: Box::new(color),
+        }
+    }
+}
+
 impl XNode for AmbientLight {
     const NAME: &'static str = "ambient";
     fn parse(element: &Element) -> Result<Self> {
@@ -124,6 +171,15 @@ impl XNodeWrite for AmbientLight {
 pub struct DirectionalLight {
     /// Contains three floating-point numbers specifying the color of the light.
     pub color: Box<[f32; 3]>,
+}
+
+impl DirectionalLight {
+    /// Create a new `DirectionalLight` with the given color.
+    pub fn new(color: [f32; 3]) -> Self {
+        Self {
+            color: Box::new(color),
+        }
+    }
 }
 
 impl XNode for DirectionalLight {
@@ -164,6 +220,18 @@ pub struct PointLight {
     pub linear_attenuation: f32,
     /// The quadratic term in the attentuation equation, see [`PointLight`].
     pub quadratic_attenuation: f32,
+}
+
+impl PointLight {
+    /// Create a new `PointLight` with the given color.
+    pub fn new(color: [f32; 3]) -> Self {
+        Self {
+            color: Box::new(color),
+            constant_attenuation: 0.,
+            linear_attenuation: 0.,
+            quadratic_attenuation: 0.,
+        }
+    }
 }
 
 impl XNode for PointLight {
@@ -224,6 +292,20 @@ pub struct SpotLight {
     pub falloff_angle: f32,
     /// A term in the directional attenuation equation of the light.
     pub falloff_exponent: f32,
+}
+
+impl SpotLight {
+    /// Create a new `SpotLight` with the given color.
+    pub fn new(color: [f32; 3]) -> Self {
+        Self {
+            color: Box::new(color),
+            constant_attenuation: 0.,
+            linear_attenuation: 0.,
+            quadratic_attenuation: 0.,
+            falloff_angle: 180.,
+            falloff_exponent: 0.,
+        }
+    }
 }
 
 impl XNode for SpotLight {

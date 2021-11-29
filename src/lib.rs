@@ -579,6 +579,26 @@ impl TryFrom<&[u8]> for Document {
 }
 
 impl Document {
+    /// Constructs a new empty [`Document`].
+    pub fn new(asset: Asset) -> Self {
+        Self {
+            asset,
+            library: vec![],
+            scene: None,
+            extra: vec![],
+        }
+    }
+
+    /// Constructs a new empty [`Document`] with creation date set to the current date/time.
+    pub fn create_now() -> Self {
+        Self::new(Asset::create_now())
+    }
+
+    /// Add a new library element with the given items.
+    pub fn push_library<T: ParseLibrary>(&mut self, items: Vec<T>) {
+        self.library.push(T::mk_element(Library::new(items)))
+    }
+
     /// Constructs a [`Document`] from a file.
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         Self::from_reader(BufReader::new(std::fs::File::open(path)?))

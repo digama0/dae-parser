@@ -36,6 +36,9 @@ pub trait ParseLibrary: XNode {
 
     /// Extract the library from a single [`LibraryElement`].
     fn extract_element(e: &LibraryElement) -> Option<&Library<Self>>;
+
+    /// Make a [`LibraryElement`] from a [`Library`].
+    fn mk_element(lib: Library<Self>) -> LibraryElement;
 }
 
 /// Declares a module of elements of type `T`.
@@ -50,9 +53,24 @@ pub struct Library<T> {
 }
 
 impl<T> Library<T> {
+    /// Construct a new `Library` with the given elements.
+    pub fn new(items: Vec<T>) -> Self {
+        Self {
+            asset: None,
+            items,
+            extra: vec![],
+        }
+    }
+
     /// Does this element have no children?
     pub fn is_empty(&self) -> bool {
         self.asset.is_none() && self.items.is_empty() && self.extra.is_empty()
+    }
+}
+
+impl<T> From<Vec<T>> for Library<T> {
+    fn from(items: Vec<T>) -> Self {
+        Self::new(items)
     }
 }
 
@@ -128,6 +146,10 @@ macro_rules! mk_libraries {
                     } else {
                         None
                     }
+                }
+
+                fn mk_element(lib: Library<Self>) -> LibraryElement {
+                    LibraryElement::$name(lib)
                 }
             }
         )*
@@ -252,7 +274,7 @@ pub(crate) mod private {
         const INSTANCE: &'static str;
 
         /// The type of additional data associated with instantiations, possibly `()`.
-        type Data: XNodeWrite;
+        type Data: XNodeWrite + Default;
 
         /// Parse the [`Self::Data`] given an element iterator,
         /// and a reference to the parent element.
@@ -263,6 +285,20 @@ pub(crate) mod private {
 
         /// Returns true if the data field has no elements.
         fn is_empty(_: &Self::Data) -> bool;
+    }
+}
+
+impl<T: Instantiate> Instance<T> {
+    /// Construct a new instance pointing at the given [`Url`] (which should
+    /// reference an object of type `T`).
+    pub fn new(url: Url) -> Self {
+        Self {
+            sid: Default::default(),
+            url: Ref::new(url),
+            name: Default::default(),
+            data: Default::default(),
+            extra: Default::default(),
+        }
     }
 }
 
@@ -314,6 +350,18 @@ pub enum DefInstance<T: Instantiate> {
     Def(T),
     /// An instantiation of a `T`.
     Ref(Instance<T>),
+}
+
+impl<T: Instantiate> From<Instance<T>> for DefInstance<T> {
+    fn from(v: Instance<T>) -> Self {
+        Self::Ref(v)
+    }
+}
+
+impl<T: Instantiate> From<T> for DefInstance<T> {
+    fn from(v: T) -> Self {
+        Self::Def(v)
+    }
 }
 
 impl<T: Instantiate + Debug> Debug for DefInstance<T>

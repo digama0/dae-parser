@@ -15,6 +15,29 @@ pub struct Geometry {
     pub extra: Vec<Extra>,
 }
 
+impl Geometry {
+    /// Construct a new `Geometry` given an `id` and the underlying element data.
+    pub fn new(id: impl Into<String>, element: GeometryElement) -> Self {
+        Self {
+            id: Some(id.into()),
+            name: None,
+            asset: None,
+            element,
+            extra: vec![],
+        }
+    }
+
+    /// Construct a new `Geometry` containing a [`Mesh`].
+    pub fn new_mesh(
+        id: impl Into<String>,
+        sources: Vec<Source>,
+        vertices: Vertices,
+        elements: Vec<Primitive>,
+    ) -> Self {
+        Self::new(id, Mesh::new(sources, vertices, elements).into())
+    }
+}
+
 impl XNode for Geometry {
     const NAME: &'static str = "geometry";
     fn parse(element: &Element) -> Result<Self> {
@@ -51,7 +74,7 @@ impl CollectLocalMaps for Geometry {
 }
 
 /// Extra data associated to [`Instance`]<[`Geometry`]>.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct InstanceGeometryData {
     /// Binds material symbols to material instances. This allows a
     /// single geometry to be instantiated into a scene multiple times
@@ -104,6 +127,18 @@ pub enum GeometryElement {
     Mesh(Mesh),
     /// A multisegment spline.
     Spline(Spline),
+}
+
+impl From<Spline> for GeometryElement {
+    fn from(v: Spline) -> Self {
+        Self::Spline(v)
+    }
+}
+
+impl From<Mesh> for GeometryElement {
+    fn from(v: Mesh) -> Self {
+        Self::Mesh(v)
+    }
 }
 
 impl CollectLocalMaps for GeometryElement {
@@ -177,6 +212,30 @@ pub struct Mesh {
 }
 
 impl Mesh {
+    /// Construct a new `Mesh` from vertices and elements.
+    pub fn new(sources: Vec<Source>, vertices: Vertices, elements: Vec<Primitive>) -> Self {
+        assert!(!sources.is_empty());
+        Self {
+            convex: false,
+            sources,
+            vertices: Some(vertices),
+            elements,
+            extra: vec![],
+        }
+    }
+
+    /// Construct a new convex `Mesh` from vertices and elements.
+    pub fn new_convex(sources: Vec<Source>, vertices: Vertices, elements: Vec<Primitive>) -> Self {
+        assert!(!sources.is_empty());
+        Self {
+            convex: true,
+            sources,
+            vertices: Some(vertices),
+            elements,
+            extra: vec![],
+        }
+    }
+
     /// The name of the XML node: `convex_mesh`
     pub const CONVEX: &'static str = "convex_mesh";
 
@@ -296,6 +355,21 @@ impl Traversable for Vertices {
 }
 
 impl Vertices {
+    /// Construct a new `Vertices` object with the given inputs.
+    /// * One of the inputs must have [`Semantic::Position`].
+    pub fn new(id: impl Into<String>, inputs: Vec<Input>) -> Self {
+        Self {
+            id: id.into(),
+            name: None,
+            position: inputs
+                .iter()
+                .position(|i| i.semantic == Semantic::Position)
+                .expect("vertices: missing POSITION input"),
+            inputs,
+            extra: vec![],
+        }
+    }
+
     /// The input with [`Semantic::Position`].
     pub fn position_input(&self) -> &Input {
         &self.inputs[self.position]
@@ -328,6 +402,19 @@ pub struct Geom<T> {
     pub data: T,
     /// Provides arbitrary additional information about this element.
     pub extra: Vec<Extra>,
+}
+
+impl<T: ParseGeom> Geom<T> {
+    fn new_geom(material: Option<String>, inputs: InputList, count: usize, data: T) -> Self {
+        Self {
+            name: None,
+            material,
+            count,
+            inputs,
+            data,
+            extra: vec![],
+        }
+    }
 }
 
 pub(crate) use private::ParseGeom;
@@ -452,6 +539,23 @@ pub struct LineGeom {
 /// together and then organize those vertices into individual lines.
 pub type Lines = Geom<LineGeom>;
 
+impl Lines {
+    /// Construct a new `Lines` object from a data buffer.
+    /// The data buffer `prim` contains exactly `count` lines, consisting of 2 vertices,
+    /// each consisting of `inputs.len()` indices,
+    /// for a total of `inputs.len() * 2 * count` values.
+    pub fn new(
+        material: Option<String>,
+        inputs: Vec<InputS>,
+        count: usize,
+        prim: Box<[u32]>,
+    ) -> Self {
+        let inputs = InputList::new(inputs);
+        assert!(inputs.len() * 2 * count == prim.len());
+        Self::new_geom(material, inputs, count, LineGeom { prim: Some(prim) })
+    }
+}
+
 impl Deref for LineGeom {
     type Target = Option<Box<[u32]>>;
 
@@ -471,7 +575,7 @@ impl ParseGeom for LineGeom {
 
     fn validate(res: &Geom<Self>) -> Result<()> {
         if let Some(ref data) = *res.data {
-            if res.inputs.depth * 2 * res.count != data.len() {
+            if res.inputs.stride * 2 * res.count != data.len() {
                 return Err("line count does not match <p> field".into());
             }
         }
@@ -499,6 +603,18 @@ pub struct LineStripGeom {
 /// Provides the information needed to bind vertex attributes together and then organize those vertices into
 /// connected line-strips.
 pub type LineStrips = Geom<LineStripGeom>;
+
+impl LineStrips {
+    /// Construct a new `LineStrips` object from a data buffer.
+    /// Each buffer in `data` contains 2 or more vertices,
+    /// each consisting of `inputs.len()` indices,
+    /// for a total of `inputs.len() * verts` values.
+    pub fn new(material: Option<String>, inputs: Vec<InputS>, prim: Vec<Box<[u32]>>) -> Self {
+        let inputs = InputList::new(inputs);
+        debug_assert!(prim.iter().all(|p| inputs.check_prim::<2>(p)));
+        Self::new_geom(material, inputs, prim.len(), LineStripGeom { prim })
+    }
+}
 
 impl Deref for LineStripGeom {
     type Target = Vec<Box<[u32]>>;
@@ -546,6 +662,13 @@ pub struct PolygonHole {
     pub hole: Vec<Box<[u32]>>,
 }
 
+impl PolygonHole {
+    /// Construct a new `PolygonHole` from a list of vertices and 0 or more holes.
+    pub fn new(verts: Box<[u32]>, hole: Vec<Box<[u32]>>) -> Self {
+        Self { verts, hole }
+    }
+}
+
 impl XNodeWrite for PolygonHole {
     fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
         let e = ElemBuilder::new("ph").start(w)?;
@@ -565,6 +688,17 @@ pub struct PolygonGeom(
 /// Provides the information needed for a mesh to bind vertex attributes
 /// together and then organize those vertices into individual polygons.
 pub type Polygons = Geom<PolygonGeom>;
+
+impl Polygons {
+    /// Construct a new `Polygons` object from raw data.
+    pub fn new(material: Option<String>, inputs: Vec<InputS>, prim: Vec<PolygonHole>) -> Self {
+        let inputs = InputList::new(inputs);
+        debug_assert!(prim.iter().all(|ph| {
+            inputs.check_prim::<3>(&ph.verts) && ph.hole.iter().all(|h| inputs.check_prim::<3>(h))
+        }));
+        Self::new_geom(material, inputs, prim.len(), PolygonGeom(prim))
+    }
+}
 
 impl Deref for PolygonGeom {
     type Target = Vec<PolygonHole>;
@@ -636,16 +770,37 @@ pub struct PolyListGeom {
 /// together and then organize those vertices into individual polygons.
 pub type PolyList = Geom<PolyListGeom>;
 
+impl PolyList {
+    /// Construct a new `PolyList` object from a data buffer.
+    /// Each value `n` in `vcount` corresponds to a polygon with `n` vertices,
+    /// to which `inputs.len() * n` index values are associated in `prim`.
+    pub fn new(
+        material: Option<String>,
+        inputs: Vec<InputS>,
+        vcount: Box<[u32]>,
+        prim: Box<[u32]>,
+    ) -> Self {
+        let inputs = InputList::new(inputs);
+        debug_assert!(inputs.len() * vcount.iter().sum::<u32>() as usize == prim.len());
+        Self::new_geom(
+            material,
+            inputs,
+            vcount.len(),
+            PolyListGeom { vcount, prim },
+        )
+    }
+}
+
 pub(crate) fn validate_vcount<T>(
     count: usize,
-    depth: usize,
+    stride: usize,
     vcount: &[u32],
     prim: &[T],
 ) -> Result<()> {
     if count != vcount.len() {
         return Err("count does not match <vcount> field".into());
     }
-    if depth * vcount.iter().sum::<u32>() as usize != prim.len() {
+    if stride * vcount.iter().sum::<u32>() as usize != prim.len() {
         return Err("vcount does not match <p>/<v> field".into());
     }
     Ok(())
@@ -664,7 +819,7 @@ impl ParseGeom for PolyListGeom {
     fn validate(res: &Geom<Self>) -> Result<()> {
         validate_vcount(
             res.count,
-            res.inputs.depth,
+            res.inputs.stride,
             &res.data.vcount,
             &res.data.prim,
         )
@@ -700,6 +855,23 @@ pub struct TriangleGeom {
 /// together and then organize those vertices into individual triangles.
 pub type Triangles = Geom<TriangleGeom>;
 
+impl Triangles {
+    /// Construct a new `Triangles` object from a data buffer.
+    /// The data buffer `prim` contains exactly `count` triangles, consisting of 3 vertices,
+    /// each consisting of `inputs.len()` indices,
+    /// for a total of `inputs.len() * 3 * count` values.
+    pub fn new(
+        material: Option<String>,
+        inputs: Vec<InputS>,
+        count: usize,
+        prim: Box<[u32]>,
+    ) -> Self {
+        let inputs = InputList::new(inputs);
+        assert!(inputs.len() * 3 * count == prim.len());
+        Self::new_geom(material, inputs, count, TriangleGeom { prim: Some(prim) })
+    }
+}
+
 impl Deref for TriangleGeom {
     type Target = Option<Box<[u32]>>;
 
@@ -719,7 +891,7 @@ impl ParseGeom for TriangleGeom {
 
     fn validate(res: &Geom<Self>) -> Result<()> {
         if let Some(ref data) = *res.data {
-            if res.inputs.depth * 3 * res.count != data.len() {
+            if res.inputs.stride * 3 * res.count != data.len() {
                 return Err("triangle count does not match <p> field".into());
             }
         }
@@ -751,6 +923,18 @@ pub struct TriFanGeom {
 /// Provides the information needed for a mesh to bind vertex attributes
 /// together and then organize those vertices into connected triangles.
 pub type TriFans = Geom<TriFanGeom>;
+
+impl TriFans {
+    /// Construct a new `TriFans` object from a data buffer.
+    /// Each buffer in `data` contains 3 or more vertices,
+    /// each consisting of `inputs.len()` indices,
+    /// for a total of `inputs.len() * verts` values.
+    pub fn new(material: Option<String>, inputs: Vec<InputS>, prim: Vec<Box<[u32]>>) -> Self {
+        let inputs = InputList::new(inputs);
+        debug_assert!(prim.iter().all(|p| inputs.check_prim::<3>(p)));
+        Self::new_geom(material, inputs, prim.len(), TriFanGeom { prim })
+    }
+}
 
 impl Deref for TriFanGeom {
     type Target = Vec<Box<[u32]>>;
@@ -805,6 +989,18 @@ pub struct TriStripGeom {
 /// together and then organize those vertices into connected triangles.
 pub type TriStrips = Geom<TriStripGeom>;
 
+impl TriStrips {
+    /// Construct a new `TriStrips` object from a data buffer.
+    /// Each buffer in `data` contains 3 or more vertices,
+    /// each consisting of `inputs.len()` indices,
+    /// for a total of `inputs.len() * verts` values.
+    pub fn new(material: Option<String>, inputs: Vec<InputS>, prim: Vec<Box<[u32]>>) -> Self {
+        let inputs = InputList::new(inputs);
+        debug_assert!(prim.iter().all(|p| inputs.check_prim::<3>(p)));
+        Self::new_geom(material, inputs, prim.len(), TriStripGeom { prim })
+    }
+}
+
 impl Deref for TriStripGeom {
     type Target = Vec<Box<[u32]>>;
 
@@ -851,6 +1047,18 @@ pub struct Spline {
     pub controls: ControlVertices,
     /// Provides arbitrary additional information about this element.
     pub extra: Vec<Extra>,
+}
+
+impl Spline {
+    /// Construct a new `Spline` object with the given inputs.
+    pub fn new(sources: Vec<Source>, controls: Vec<Input>) -> Self {
+        Self {
+            closed: false,
+            sources,
+            controls: ControlVertices::new(controls),
+            extra: vec![],
+        }
+    }
 }
 
 impl XNode for Spline {
@@ -917,6 +1125,19 @@ impl XNodeWrite for ControlVertices {
 }
 
 impl ControlVertices {
+    /// Construct a new `Vertices` object with the given inputs.
+    /// * One of the inputs must have [`Semantic::Position`].
+    pub fn new(inputs: Vec<Input>) -> Self {
+        Self {
+            position: inputs
+                .iter()
+                .position(|i| i.semantic == Semantic::Position)
+                .expect("control_vertices: missing POSITION input"),
+            inputs,
+            extra: vec![],
+        }
+    }
+
     /// The input with [`Semantic::Position`].
     pub fn position_input(&self) -> &Input {
         &self.inputs[self.position]

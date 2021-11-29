@@ -22,6 +22,21 @@ pub struct Shape {
     pub extra: Vec<Extra>,
 }
 
+impl Shape {
+    /// Construct a new `Shape`.
+    pub fn new(geom: impl Into<ShapeGeom>) -> Self {
+        Self {
+            hollow: Default::default(),
+            mass: Default::default(),
+            density: Default::default(),
+            physics_material: Default::default(),
+            geom: geom.into(),
+            transform: Default::default(),
+            extra: Default::default(),
+        }
+    }
+}
+
 impl XNode for Shape {
     const NAME: &'static str = "shape";
     fn parse(element: &Element) -> Result<Self> {
@@ -83,6 +98,54 @@ pub enum ShapeGeom {
     Geom(Instance<Geometry>),
 }
 
+impl From<Plane> for ShapeGeom {
+    fn from(v: Plane) -> Self {
+        Self::Plane(v)
+    }
+}
+
+impl From<BoxShape> for ShapeGeom {
+    fn from(v: BoxShape) -> Self {
+        Self::Box(v)
+    }
+}
+
+impl From<Sphere> for ShapeGeom {
+    fn from(v: Sphere) -> Self {
+        Self::Sphere(v)
+    }
+}
+
+impl From<Cylinder> for ShapeGeom {
+    fn from(v: Cylinder) -> Self {
+        Self::Cylinder(v)
+    }
+}
+
+impl From<TaperedCylinder> for ShapeGeom {
+    fn from(v: TaperedCylinder) -> Self {
+        Self::TaperedCylinder(v)
+    }
+}
+
+impl From<Capsule> for ShapeGeom {
+    fn from(v: Capsule) -> Self {
+        Self::Capsule(v)
+    }
+}
+
+impl From<TaperedCapsule> for ShapeGeom {
+    fn from(v: TaperedCapsule) -> Self {
+        Self::TaperedCapsule(v)
+    }
+}
+
+impl From<Instance<Geometry>> for ShapeGeom {
+    fn from(v: Instance<Geometry>) -> Self {
+        Self::Geom(v)
+    }
+}
+
 impl ShapeGeom {
     /// Parse a [`ShapeGeom`] from an XML element.
     pub fn parse(e: &Element) -> Result<Option<Self>> {
@@ -124,6 +187,16 @@ pub struct Plane {
     pub extra: Vec<Extra>,
 }
 
+impl Plane {
+    /// Construct a new `Plane`.
+    pub fn new(equation: [f32; 4]) -> Self {
+        Self {
+            equation,
+            extra: vec![],
+        }
+    }
+}
+
 impl XNode for Plane {
     const NAME: &'static str = "plane";
     fn parse(element: &Element) -> Result<Self> {
@@ -153,6 +226,16 @@ pub struct BoxShape {
     pub half_extents: [f32; 3],
     /// Provides arbitrary additional information about this element.
     pub extra: Vec<Extra>,
+}
+
+impl BoxShape {
+    /// Construct a new `BoxShape`.
+    pub fn new(half_extents: [f32; 3]) -> Self {
+        Self {
+            half_extents,
+            extra: vec![],
+        }
+    }
 }
 
 impl XNode for BoxShape {
@@ -185,6 +268,16 @@ pub struct Sphere {
     pub extra: Vec<Extra>,
 }
 
+impl Sphere {
+    /// Construct a new `Sphere`.
+    pub fn new(radius: f32) -> Self {
+        Self {
+            radius,
+            extra: vec![],
+        }
+    }
+}
+
 impl XNode for Sphere {
     const NAME: &'static str = "sphere";
     fn parse(element: &Element) -> Result<Self> {
@@ -215,6 +308,17 @@ pub struct Cylinder {
     pub radius: [f32; 2],
     /// Provides arbitrary additional information about this element.
     pub extra: Vec<Extra>,
+}
+
+impl Cylinder {
+    /// Construct a new `Cylinder`.
+    pub fn new(height: f32, radius: [f32; 2]) -> Self {
+        Self {
+            height,
+            radius,
+            extra: vec![],
+        }
+    }
 }
 
 impl XNode for Cylinder {
@@ -255,6 +359,18 @@ pub struct TaperedCylinder {
     pub extra: Vec<Extra>,
 }
 
+impl TaperedCylinder {
+    /// Construct a new `TaperedCylinder`.
+    pub fn new(height: f32, radius1: [f32; 2], radius2: [f32; 2]) -> Self {
+        Self {
+            height,
+            radius1,
+            radius2,
+            extra: vec![],
+        }
+    }
+}
+
 impl XNode for TaperedCylinder {
     const NAME: &'static str = "tapered_cylinder";
     fn parse(element: &Element) -> Result<Self> {
@@ -289,6 +405,17 @@ pub struct Capsule {
     pub radius: [f32; 2],
     /// Provides arbitrary additional information about this element.
     pub extra: Vec<Extra>,
+}
+
+impl Capsule {
+    /// Construct a new `Capsule`.
+    pub fn new(height: f32, radius: [f32; 2]) -> Self {
+        Self {
+            height,
+            radius,
+            extra: vec![],
+        }
+    }
 }
 
 impl XNode for Capsule {
@@ -327,6 +454,18 @@ pub struct TaperedCapsule {
     pub radius2: [f32; 2],
     /// Provides arbitrary additional information about this element.
     pub extra: Vec<Extra>,
+}
+
+impl TaperedCapsule {
+    /// Construct a new `TaperedCapsule`.
+    pub fn new(height: f32, radius1: [f32; 2], radius2: [f32; 2]) -> Self {
+        Self {
+            height,
+            radius1,
+            radius2,
+            extra: vec![],
+        }
+    }
 }
 
 impl XNode for TaperedCapsule {

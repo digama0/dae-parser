@@ -18,6 +18,20 @@ pub struct Camera {
     pub extra: Vec<Extra>,
 }
 
+impl Camera {
+    /// Construct a new `Camera` with the given projection type.
+    pub fn new(ty: ProjectionType) -> Self {
+        Self {
+            id: Default::default(),
+            name: Default::default(),
+            asset: Default::default(),
+            optics: Optics::new(ty),
+            imager: Default::default(),
+            extra: Default::default(),
+        }
+    }
+}
+
 impl XNode for Camera {
     const NAME: &'static str = "camera";
     fn parse(element: &Element) -> Result<Self> {
@@ -59,6 +73,17 @@ pub struct Imager {
     pub extra: Vec<Extra>,
 }
 
+impl Imager {
+    /// Construct a new `Imager` with the given technique(s).
+    pub fn new(technique: Vec<Technique>) -> Self {
+        assert!(!technique.is_empty());
+        Self {
+            technique,
+            extra: vec![],
+        }
+    }
+}
+
 impl XNode for Imager {
     const NAME: &'static str = "imager";
     fn parse(element: &Element) -> Result<Self> {
@@ -89,6 +114,17 @@ pub struct Optics {
     pub technique: Vec<Technique>,
     /// Provides arbitrary additional information about this element.
     pub extra: Vec<Extra>,
+}
+
+impl Optics {
+    /// Construct a new `Optics` from the given projection type.
+    pub fn new(ty: ProjectionType) -> Self {
+        Self {
+            ty,
+            technique: Default::default(),
+            extra: Default::default(),
+        }
+    }
 }
 
 impl XNode for Optics {
@@ -165,6 +201,20 @@ pub struct Orthographic {
     pub zfar: f32,
 }
 
+impl Orthographic {
+    /// Construct a new `Orthographic` object.
+    pub fn new(xmag: Option<f32>, ymag: Option<f32>, znear: f32, zfar: f32) -> Self {
+        Self {
+            xmag,
+            ymag,
+            extra: Default::default(),
+            aspect_ratio: Default::default(),
+            znear,
+            zfar,
+        }
+    }
+}
+
 impl XNode for Orthographic {
     const NAME: &'static str = "orthographic";
     fn parse(element: &Element) -> Result<Self> {
@@ -208,6 +258,19 @@ pub struct Perspective {
     pub znear: f32,
     /// The distance to the far clipping plane.
     pub zfar: f32,
+}
+
+impl Perspective {
+    /// Construct a new `Perspective` object.
+    pub fn new(xfov: Option<f32>, yfov: Option<f32>, znear: f32, zfar: f32) -> Self {
+        Self {
+            xfov,
+            yfov,
+            aspect_ratio: Default::default(),
+            znear,
+            zfar,
+        }
+    }
 }
 
 impl XNode for Perspective {

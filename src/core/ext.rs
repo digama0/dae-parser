@@ -70,6 +70,12 @@ pub struct Technique {
     pub element: Element,
 }
 
+impl From<Element> for Technique {
+    fn from(element: Element) -> Self {
+        Self { element }
+    }
+}
+
 impl XNode for Technique {
     const NAME: &'static str = "technique";
     fn parse(element: &Element) -> Result<Self> {

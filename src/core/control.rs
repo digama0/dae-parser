@@ -15,6 +15,19 @@ pub struct Controller {
     pub extra: Vec<Extra>,
 }
 
+impl Controller {
+    /// Create a new [`Controller`] from a [`ControlElement`].
+    pub fn new(element: ControlElement) -> Self {
+        Self {
+            id: None,
+            name: None,
+            asset: None,
+            element,
+            extra: vec![],
+        }
+    }
+}
+
 impl XNode for Controller {
     const NAME: &'static str = "controller";
     fn parse(element: &Element) -> Result<Self> {
@@ -44,7 +57,7 @@ impl XNodeWrite for Controller {
 }
 
 /// Extra data associated to [`Instance`]<[`Controller`]>.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct InstanceControllerData {
     /// Indicates where a skin controller is to start to search for the
     /// joint nodes it needs. This element is meaningless for morph controllers.
@@ -134,6 +147,21 @@ pub struct Joints {
     pub extra: Vec<Extra>,
 }
 
+impl Joints {
+    /// Construct a new `Joints` from a list of inputs.
+    /// One of the inputs must have [`Semantic::Joint`].
+    pub fn new(inputs: Vec<Input>) -> Self {
+        Self {
+            joint: inputs
+                .iter()
+                .position(|i| i.semantic == Semantic::Joint)
+                .expect("joints: missing JOINT input"),
+            inputs,
+            extra: vec![],
+        }
+    }
+}
+
 impl XNode for Joints {
     const NAME: &'static str = "joints";
     fn parse(element: &Element) -> Result<Self> {
@@ -144,7 +172,7 @@ impl XNode for Joints {
             joint: inputs
                 .iter()
                 .position(|i| i.semantic == Semantic::Joint)
-                .ok_or("vertex_weights: missing JOINT input")?,
+                .ok_or("joints: missing JOINT input")?,
             inputs,
             extra: Extra::parse_many(it)?,
         })
@@ -180,6 +208,24 @@ pub struct Morph {
     pub targets: Targets,
     /// Provides arbitrary additional information about this element.
     pub extra: Vec<Extra>,
+}
+
+impl Morph {
+    /// Construct a new `Morph` of  from a list of sources and targets.
+    /// * The `source` should reference a `Geometry`.
+    /// * There should be at least two `sources`.
+    /// * One of the `targets` must have [`Semantic::MorphTarget`].
+    /// * One of the `targets` must have [`Semantic::MorphWeight`].
+    pub fn new(source: Url, sources: Vec<Source>, targets: Vec<Input>) -> Self {
+        assert!(sources.len() >= 2);
+        Self {
+            source: Ref::new(source),
+            method: Default::default(),
+            sources,
+            targets: Targets::new(targets),
+            extra: vec![],
+        }
+    }
 }
 
 impl XNode for Morph {
@@ -284,6 +330,29 @@ pub struct Skin {
     pub extra: Vec<Extra>,
 }
 
+impl Skin {
+    /// Construct a `Skin` from the mandatory data.
+    /// * The source should reference a `Mesh`.
+    /// * There should be at least 3 `sources`.
+    /// * One of the `joints` must have [`Semantic::Joint`].
+    pub fn new(
+        source: Url,
+        sources: Vec<Source>,
+        joints: Vec<Input>,
+        weights: VertexWeights,
+    ) -> Self {
+        assert!(sources.len() >= 3);
+        Self {
+            source: Ref::new(source),
+            bind_shape_matrix: None,
+            sources,
+            joints: Joints::new(joints),
+            weights,
+            extra: vec![],
+        }
+    }
+}
+
 impl XNode for Skin {
     const NAME: &'static str = "skin";
     fn parse(element: &Element) -> Result<Self> {
@@ -327,6 +396,26 @@ pub struct Targets {
     pub morph_weight: usize,
     /// Provides arbitrary additional information about this element.
     pub extra: Vec<Extra>,
+}
+
+impl Targets {
+    /// Construct a new `Targets` from a list of inputs.
+    /// One of the inputs must have [`Semantic::MorphTarget`], and
+    /// one of the inputs must have [`Semantic::MorphWeight`].
+    pub fn new(inputs: Vec<Input>) -> Self {
+        Self {
+            morph_target: inputs
+                .iter()
+                .position(|i| i.semantic == Semantic::MorphTarget)
+                .expect("targets: missing MORPH_TARGET input"),
+            morph_weight: inputs
+                .iter()
+                .position(|i| i.semantic == Semantic::MorphWeight)
+                .expect("targets: missing MORPH_WEIGHT input"),
+            inputs,
+            extra: vec![],
+        }
+    }
 }
 
 impl XNode for Targets {
@@ -409,7 +498,7 @@ impl XNode for VertexWeights {
             prim: parse_opt("v", &mut it, parse_array)?.unwrap_or_default(),
             extra: Extra::parse_many(it)?,
         };
-        validate_vcount(res.count, res.inputs.depth, &res.vcount, &res.prim)?;
+        validate_vcount(res.count, res.inputs.stride, &res.vcount, &res.prim)?;
         Ok(res)
     }
 }
@@ -428,6 +517,27 @@ impl XNodeWrite for VertexWeights {
 }
 
 impl VertexWeights {
+    /// Construct a new `VertexWeights` from a list of inputs.
+    /// One of the `inputs` must have [`Semantic::Joint`].
+    pub fn new(inputs: Vec<InputS>, vcount: Box<[u32]>, prim: Box<[i32]>) -> Self {
+        let inputs = InputList::new(inputs);
+        assert!(
+            inputs.stride * vcount.iter().sum::<u32>() as usize == prim.len(),
+            "vcount does not match prim"
+        );
+        Self {
+            count: vcount.len(),
+            joint: inputs
+                .iter()
+                .position(|i| i.semantic == Semantic::Joint)
+                .expect("vertex_weights: missing JOINT input"),
+            inputs,
+            vcount,
+            prim,
+            extra: vec![],
+        }
+    }
+
     /// The input with [`Semantic::Joint`].
     pub fn joint_input(&self) -> &Input {
         &self.inputs[self.joint]

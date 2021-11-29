@@ -1,4 +1,5 @@
 use crate::*;
+use chrono::{DateTime, Local};
 
 /// Defines asset-management information regarding its parent element.
 #[derive(Clone, Debug)]
@@ -8,13 +9,13 @@ pub struct Asset {
     /// Contains date and time that the parent element was created.
     /// Represented in an ISO 8601 format as per the XML Schema
     /// `dateTime` primitive type.
-    pub created: String,
+    pub created: DateTime<Local>,
     /// Contains a list of words used as search criteria for the parent element.
     pub keywords: Vec<String>,
     /// Contains date and time that the parent element was last
     /// modified. Represented in an ISO 8601 format as per the
     /// XML Schema `dateTime` primitive type.
-    pub modified: String,
+    pub modified: DateTime<Local>,
     /// Contains revision information for the parent element.
     pub revision: Option<String>,
     /// Contains a description of the topical subject of the parent element.
@@ -27,6 +28,30 @@ pub struct Asset {
     pub up_axis: UpAxis,
 }
 
+impl Asset {
+    /// Create a new `Asset` with the given creation and modification dates
+    /// and defaulting everything else.
+    pub fn new(created: DateTime<Local>, modified: DateTime<Local>) -> Self {
+        Self {
+            contributor: Default::default(),
+            created,
+            keywords: Default::default(),
+            modified,
+            revision: Default::default(),
+            subject: Default::default(),
+            title: Default::default(),
+            unit: Default::default(),
+            up_axis: Default::default(),
+        }
+    }
+
+    /// Create a new `Asset` object representing an object created at the current date/time.
+    pub fn create_now() -> Self {
+        let now = Local::now();
+        Self::new(now, now)
+    }
+}
+
 impl XNode for Asset {
     const NAME: &'static str = "asset";
 
@@ -35,11 +60,11 @@ impl XNode for Asset {
         let mut it = element.children().peekable();
         let res = Box::new(Asset {
             contributor: Contributor::parse_list(&mut it)?,
-            created: parse_one("created", &mut it, parse_text)?,
+            created: parse_one("created", &mut it, parse_elem)?,
             keywords: parse_opt("keywords", &mut it, parse_text)?.map_or_else(Vec::new, |s| {
                 s.split_ascii_whitespace().map(|s| s.to_owned()).collect()
             }),
-            modified: parse_one("modified", &mut it, parse_text)?,
+            modified: parse_one("modified", &mut it, parse_elem)?,
             revision: parse_opt("revision", &mut it, parse_text)?,
             subject: parse_opt("subject", &mut it, parse_text)?,
             title: parse_opt("title", &mut it, parse_text)?,
@@ -58,11 +83,11 @@ impl XNodeWrite for Asset {
     fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
         let e = Self::elem().start(w)?;
         self.contributor.write_to(w)?;
-        ElemBuilder::print_str("created", &self.created, w)?;
+        ElemBuilder::print_str("created", &self.created.to_rfc3339(), w)?;
         if !self.keywords.is_empty() {
             ElemBuilder::print_arr("keywords", &self.keywords, w)?;
         }
-        ElemBuilder::print_str("modified", &self.modified, w)?;
+        ElemBuilder::print_str("modified", &self.modified.to_rfc3339(), w)?;
         opt(&self.revision, |e| ElemBuilder::print_str("revision", e, w))?;
         opt(&self.subject, |e| ElemBuilder::print_str("subject", e, w))?;
         opt(&self.title, |e| ElemBuilder::print_str("title", e, w))?;

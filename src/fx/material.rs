@@ -16,6 +16,19 @@ pub struct Material {
     pub extra: Vec<Extra>,
 }
 
+impl Material {
+    /// Construct a new `Material` from an instance effect.
+    pub fn new(id: impl Into<String>, name: impl Into<String>, instance_effect: Url) -> Self {
+        Self {
+            id: Some(id.into()),
+            name: Some(name.into()),
+            asset: None,
+            instance_effect: Instance::new(instance_effect),
+            extra: vec![],
+        }
+    }
+}
+
 impl XNode for Material {
     const NAME: &'static str = "material";
     fn parse(element: &Element) -> Result<Self> {
@@ -71,6 +84,25 @@ pub struct InstanceMaterial {
     pub extra: Vec<Extra>,
 }
 
+impl InstanceMaterial {
+    /// Construct a new `InstanceMaterial` with the given bindings.
+    pub fn new(
+        symbol: impl Into<String>,
+        target: Url,
+        bind_vertex_input: Vec<BindVertexInput>,
+    ) -> Self {
+        Self {
+            sid: None,
+            name: None,
+            symbol: symbol.into(),
+            target: Ref::new(target),
+            bind: vec![],
+            bind_vertex_input,
+            extra: vec![],
+        }
+    }
+}
+
 impl XNode for InstanceMaterial {
     const NAME: &'static str = "instance_material";
     fn parse(element: &Element) -> Result<Self> {
@@ -121,6 +153,19 @@ pub struct BindMaterial {
     pub extra: Vec<Extra>,
 }
 
+impl BindMaterial {
+    /// Construct a `BindMaterial` with the given instances.
+    pub fn new(instance_material: Vec<InstanceMaterial>) -> Self {
+        assert!(!instance_material.is_empty());
+        Self {
+            param: vec![],
+            instance_material,
+            technique: vec![],
+            extra: vec![],
+        }
+    }
+}
+
 impl XNode for BindMaterial {
     const NAME: &'static str = "bind_material";
     fn parse(element: &Element) -> Result<Self> {
@@ -160,6 +205,16 @@ pub struct BindM {
     pub semantic: Option<String>,
     /// The location of the value to bind to the specified semantic.
     pub target: Address,
+}
+
+impl BindM {
+    /// Construct a `BindM` with the given semantic and target.
+    pub fn new(semantic: impl Into<String>, target: impl Into<String>) -> Self {
+        Self {
+            semantic: Some(semantic.into()),
+            target: Address(target.into()),
+        }
+    }
 }
 
 impl XNode for BindM {

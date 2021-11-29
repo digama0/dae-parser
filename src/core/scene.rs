@@ -16,6 +16,17 @@ pub struct Scene {
     pub extra: Vec<Extra>,
 }
 
+impl Scene {
+    /// Construct a new `Scene` from a [`VisualScene`] instance.
+    pub fn new(instance_visual_scene: Instance<VisualScene>) -> Self {
+        Self {
+            instance_physics_scene: vec![],
+            instance_visual_scene: Some(instance_visual_scene),
+            extra: vec![],
+        }
+    }
+}
+
 impl XNode for Scene {
     const NAME: &'static str = "scene";
     fn parse(element: &Element) -> Result<Self> {
@@ -56,6 +67,20 @@ pub struct VisualScene {
     pub evaluate_scene: Vec<EvaluateScene>,
     /// Provides arbitrary additional information about this element.
     pub extra: Vec<Extra>,
+}
+
+impl VisualScene {
+    /// Create a new empty `VisualScene`.
+    pub fn new(id: impl Into<String>, name: Option<String>) -> Self {
+        Self {
+            id: Some(id.into()),
+            name,
+            asset: None,
+            nodes: vec![],
+            evaluate_scene: vec![],
+            extra: vec![],
+        }
+    }
 }
 
 impl XNode for VisualScene {
@@ -188,6 +213,31 @@ impl CollectLocalMaps for Node {
 }
 
 impl Node {
+    /// Construct a new default node with the given `id` and `name`.
+    pub fn new(id: impl Into<String>, name: Option<String>) -> Self {
+        Self {
+            id: Some(id.into()),
+            name,
+            sid: Default::default(),
+            ty: Default::default(),
+            layer: Default::default(),
+            asset: Default::default(),
+            transforms: Default::default(),
+            instance_camera: Default::default(),
+            instance_controller: Default::default(),
+            instance_geometry: Default::default(),
+            instance_light: Default::default(),
+            instance_node: Default::default(),
+            children: Default::default(),
+            extra: Default::default(),
+        }
+    }
+
+    /// Add a transform to this node's transformation stack.
+    pub fn push_transform(&mut self, transform: impl Into<Transform>) {
+        self.transforms.push(transform.into())
+    }
+
     fn on_children<'a, E>(
         &'a self,
         f: &mut impl FnMut(&'a Self) -> Result<(), E>,
@@ -308,6 +358,14 @@ pub struct EvaluateScene {
     pub name: Option<String>,
     /// Describes the effect passes to evaluate a scene.
     pub render: Vec<Render>,
+}
+
+impl EvaluateScene {
+    /// Construct a new `EvaluateScene` with the given effect passes.
+    pub fn new(render: Vec<Render>) -> Self {
+        assert!(!render.is_empty());
+        Self { name: None, render }
+    }
 }
 
 impl XNode for EvaluateScene {

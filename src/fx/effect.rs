@@ -61,6 +61,25 @@ impl XNodeWrite for Effect {
 }
 
 impl Effect {
+    /// Construct a new `Effect` from common profile data.
+    pub fn new(id: impl Into<String>, technique: TechniqueFx<CommonData>) -> Self {
+        Self {
+            id: id.into(),
+            name: None,
+            asset: None,
+            annotate: vec![],
+            image: vec![],
+            new_param: vec![],
+            profile: vec![ProfileCommon::new(technique).into()],
+            extra: vec![],
+        }
+    }
+
+    /// Construct a simple `Effect` with one shader.
+    pub fn shader(id: impl Into<String>, shader: impl Into<Shader>) -> Self {
+        Self::new(id, TechniqueFx::new("common", CommonData::shader(shader)))
+    }
+
     /// Get the first [`ProfileCommon`] in this effect.
     pub fn get_common_profile(&self) -> Option<&ProfileCommon> {
         self.profile.iter().find_map(Profile::as_common)
@@ -78,7 +97,7 @@ impl Effect {
 }
 
 /// Extra data associated to [`Instance`]<[`Effect`]>.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct InstanceEffectData {
     /// [`TechniqueHint`]s indicate the desired or last-used technique
     /// inside an effect profile.
@@ -118,6 +137,21 @@ pub struct BindVertexInput {
     pub input_semantic: String,
     /// Which input set to bind.
     pub input_set: Option<u32>,
+}
+
+impl BindVertexInput {
+    /// Construct a `BindVertexInput` from the input data.
+    pub fn new(
+        semantic: impl Into<String>,
+        input_semantic: impl Into<String>,
+        input_set: Option<u32>,
+    ) -> Self {
+        Self {
+            semantic: semantic.into(),
+            input_semantic: input_semantic.into(),
+            input_set,
+        }
+    }
 }
 
 impl XNode for BindVertexInput {
@@ -169,6 +203,27 @@ pub struct TechniqueFx<T> {
     pub extra: Vec<Extra>,
 }
 
+impl<T> TechniqueFx<T> {
+    /// Construct a new `TechniqueFx` given the profile-specific data.
+    pub fn new(sid: impl Into<String>, data: T) -> Self {
+        Self {
+            id: None,
+            sid: sid.into(),
+            asset: None,
+            data,
+            extra: vec![],
+        }
+    }
+
+    /// Construct a new `TechniqueFx` with default data.
+    pub fn default(sid: impl Into<String>) -> Self
+    where
+        T: Default,
+    {
+        Self::new(sid, T::default())
+    }
+}
+
 impl<T: ProfileData> XNode for TechniqueFx<T> {
     const NAME: &'static str = "technique";
     fn parse(element: &Element) -> Result<Self> {
@@ -209,6 +264,21 @@ pub struct TechniqueHint {
     /// Profiles are constructed by appending this attribute’s value to "Profile".
     /// For example, to select [`ProfileCG`], specify `profile="CG"`.
     pub profile: Option<String>,
+}
+
+impl TechniqueHint {
+    /// Construct a new `TechniqueHint`.
+    pub fn new(
+        platform: impl Into<String>,
+        ref_: impl Into<String>,
+        profile: impl Into<String>,
+    ) -> Self {
+        Self {
+            platform: Some(platform.into()),
+            ref_: ref_.into(),
+            profile: Some(profile.into()),
+        }
+    }
 }
 
 impl XNode for TechniqueHint {

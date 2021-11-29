@@ -19,6 +19,19 @@ pub struct Accessor {
     pub param: Vec<Param>,
 }
 
+impl Accessor {
+    /// Construct a new `Accessor` from the mandatory data.
+    pub fn new(source: Url, count: usize, param: Vec<Param>) -> Self {
+        Self {
+            source,
+            count,
+            offset: 0,
+            stride: param.len(),
+            param,
+        }
+    }
+}
+
 impl XNode for Accessor {
     const NAME: &'static str = "accessor";
     fn parse(element: &Element) -> Result<Self> {
@@ -84,6 +97,25 @@ macro_rules! mk_arrays {
                 pub id: Option<String>,
                 /// The stored array of values.
                 pub val: Box<[$ty]>,
+            }
+            impl $tyname {
+                /// Construct a new array element from an array.
+                pub fn new(val: Box<[$ty]>) -> Self {
+                    Self {
+                        id: None,
+                        val,
+                    }
+                }
+            }
+            impl From<Box<[$ty]>> for $tyname {
+                fn from(val: Box<[$ty]>) -> Self {
+                    Self::new(val)
+                }
+            }
+            impl From<Vec<$ty>> for $tyname {
+                fn from(val: Vec<$ty>) -> Self {
+                    Self::new(val.into())
+                }
             }
             impl Deref for $tyname {
                 type Target = [$ty];
@@ -208,6 +240,32 @@ pub struct Param {
     pub semantic: Option<Semantic>,
 }
 
+impl Param {
+    /// Construct a new `Param` with given name and type.
+    pub fn new(name: impl Into<String>, ty: impl Into<String>) -> Self {
+        Self {
+            sid: None,
+            name: Some(name.into()),
+            ty: ty.into(),
+            semantic: None,
+        }
+    }
+
+    /// Construct parameters corresponding to `X,Y,Z` accesses, used for vector values.
+    pub fn new_xyz() -> Vec<Self> {
+        vec![
+            Self::new("X", "float"),
+            Self::new("Y", "float"),
+            Self::new("Z", "float"),
+        ]
+    }
+
+    /// Construct parameters corresponding to `S,T` accesses, used for texture coordinates.
+    pub fn new_st() -> Vec<Self> {
+        vec![Self::new("S", "float"), Self::new("T", "float")]
+    }
+}
+
 impl XNode for Param {
     const NAME: &'static str = "param";
     fn parse(element: &Element) -> Result<Self> {
@@ -248,6 +306,21 @@ pub struct Source {
     pub accessor: Accessor,
     /// Declares the information used to process some portion of the content. (optional)
     pub technique: Vec<Technique>,
+}
+
+impl Source {
+    /// Construct a new `Source` given an inline array and access information.
+    pub fn new_local(id: impl Into<String>, param: Vec<Param>, array: ArrayElement) -> Self {
+        let id = id.into();
+        Self {
+            accessor: Accessor::new(Url::Fragment(id.clone()), array.len(), param),
+            id: Some(id),
+            name: None,
+            asset: None,
+            array: Some(array),
+            technique: vec![],
+        }
+    }
 }
 
 impl XNode for Source {
@@ -358,6 +431,11 @@ impl XNodeWrite for Input {
 }
 
 impl Input {
+    /// Construct a new [`Input`].
+    pub fn new(semantic: Semantic, source: Url) -> Self {
+        Self { semantic, source }
+    }
+
     /// Typecast `self.source` as a `UrlRef<Source>`.
     /// The `semantic` is checked in debug mode to ensure that it is compatible with a
     /// [`Source`] target.
@@ -389,6 +467,17 @@ pub struct InputS {
     /// Which inputs to group as a single set. This is helpful when multiple inputs
     /// share the same semantics.
     pub set: Option<u32>,
+}
+
+impl InputS {
+    /// Construct a new [`InputS`].
+    pub fn new(semantic: Semantic, source: Url, offset: u32, set: Option<u32>) -> Self {
+        Self {
+            input: Input { semantic, source },
+            offset,
+            set,
+        }
+    }
 }
 
 impl Deref for InputS {
@@ -425,9 +514,9 @@ impl XNodeWrite for InputS {
 pub struct InputList {
     /// The list of inputs.
     pub inputs: Vec<InputS>,
-    /// The depth of an input list is the largest offset plus one;
-    /// this is the "stride" of accesses applied by these inputs.
-    pub depth: usize,
+    /// The stride of an input list is the largest offset plus one;
+    /// this is the stride of accesses applied by these inputs.
+    pub stride: usize,
 }
 
 impl Deref for InputList {
@@ -438,15 +527,25 @@ impl Deref for InputList {
     }
 }
 
+impl From<Vec<InputS>> for InputList {
+    fn from(inputs: Vec<InputS>) -> Self {
+        Self::new(inputs)
+    }
+}
+
 impl InputList {
+    /// Construct a new `InputList` from a list of inputs.
+    pub fn new(inputs: Vec<InputS>) -> Self {
+        let stride = inputs.iter().map(|i| i.offset).max().map_or(0, |n| n + 1) as usize;
+        Self { inputs, stride }
+    }
+
     pub(crate) fn parse<const N: usize>(it: &mut ElementIter<'_>) -> Result<Self> {
-        let inputs = InputS::parse_list_n::<N>(it)?;
-        let depth = inputs.iter().map(|i| i.offset).max().map_or(0, |n| n + 1) as usize;
-        Ok(InputList { inputs, depth })
+        Ok(InputList::new(InputS::parse_list_n::<N>(it)?))
     }
 
     pub(crate) fn check_prim<const MIN: usize>(&self, data: &[u32]) -> bool {
-        self.depth != 0 && data.len() < self.depth * MIN && data.len() % self.depth == 0
+        self.stride != 0 && data.len() < self.stride * MIN && data.len() % self.stride == 0
     }
 }
 

@@ -1,7 +1,7 @@
 use crate::*;
 
 /// Categorizes the declaration of animation information.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Animation {
     /// A text string containing the unique identifier of the element.
     pub id: Option<String>,
@@ -118,6 +118,22 @@ pub struct AnimationClip {
     pub extra: Vec<Extra>,
 }
 
+impl AnimationClip {
+    /// Create a new `AnimationClip` from the given list of instances.
+    pub fn new(instance_animation: Vec<Instance<Animation>>) -> Self {
+        assert!(!instance_animation.is_empty());
+        Self {
+            id: Default::default(),
+            name: Default::default(),
+            start: Default::default(),
+            end: Default::default(),
+            asset: Default::default(),
+            instance_animation,
+            extra: Default::default(),
+        }
+    }
+}
+
 impl XNode for AnimationClip {
     const NAME: &'static str = "animation_clip";
     fn parse(element: &Element) -> Result<Self> {
@@ -159,6 +175,16 @@ pub struct Channel {
     pub target: Address,
 }
 
+impl Channel {
+    /// Construct a new `Channel` from a source and target.
+    pub fn new(source: Url, target: String) -> Self {
+        Self {
+            source: Ref::new(source),
+            target: Address(target),
+        }
+    }
+}
+
 impl XNode for Channel {
     const NAME: &'static str = "channel";
     fn parse(element: &Element) -> Result<Self> {
@@ -189,6 +215,21 @@ pub struct Sampler {
     pub inputs: Vec<Input>,
     /// The index into `inputs` for the [`Semantic::Interpolation`] input (which must exist).
     pub interpolation: usize,
+}
+
+impl Sampler {
+    /// Construct a new `Sampler` from a list of inputs.
+    /// One of the inputs must have [`Semantic::Interpolation`].
+    pub fn new(inputs: Vec<Input>) -> Self {
+        Self {
+            id: None,
+            interpolation: inputs
+                .iter()
+                .position(|i| i.semantic == Semantic::Interpolation)
+                .expect("sampler: missing INTERPOLATION input"),
+            inputs,
+        }
+    }
 }
 
 impl XNode for Sampler {

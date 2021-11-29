@@ -2,7 +2,7 @@ use crate::*;
 
 /// Allows for building complex combinations of rigid bodies and constraints
 /// that may be instantiated multiple times.
-#[derive(Clone, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct PhysicsModel {
     /// A text string containing the unique identifier of the element.
     pub id: Option<String>,
@@ -55,7 +55,7 @@ impl XNodeWrite for PhysicsModel {
 }
 
 /// Extra data associated to [`Instance`]<[`PhysicsModel`]>.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct InstancePhysicsModelData {
     /// Points to the id of a node in the visual scene. This allows a physics model to be
     /// instantiated under a specific transform node, which will dictate the initial position
@@ -115,7 +115,7 @@ impl CollectLocalMaps for InstancePhysicsModelData {
 /// Describes simulated bodies that do not deform.
 ///
 /// These bodies may or may not be connected by constraints (hinge, ball-joint, and so on).
-#[derive(Clone, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct RigidBody {
     /// A text string containing the scoped identifier of the [`RigidBody`] element.
     /// This value must be unique among its sibling elements.
@@ -262,6 +262,20 @@ pub struct InstanceRigidBody {
     pub extra: Vec<Extra>,
 }
 
+impl InstanceRigidBody {
+    /// Construct a new `InstanceRigidBody` which initializes a [`RigidBody`] `body`
+    /// attached to [`Node`] `target`.
+    pub fn new(body: impl Into<String>, target: Url) -> Self {
+        Self {
+            body: Ref::new(body.into()),
+            target: Ref::new(target),
+            common: Default::default(),
+            technique: vec![],
+            extra: vec![],
+        }
+    }
+}
+
 impl Deref for InstanceRigidBody {
     type Target = InstanceRigidBodyCommon;
 
@@ -387,6 +401,24 @@ pub struct RigidConstraint {
     pub extra: Vec<Extra>,
 }
 
+impl RigidConstraint {
+    /// Construct a `RigidConstraint` with default arguments.
+    /// `ref_attachment` and `attachment` are URI references to a [`RigidBody`] or [`Node`].
+    /// It must refer to a [`RigidBody`] in `attachment` or in `ref_attachment`;
+    /// they cannot both be [`Node`]s.
+    pub fn new(ref_attachment: Url, attachment: Url) -> Self {
+        Self {
+            sid: Default::default(),
+            name: Default::default(),
+            ref_attachment: Attachment::new(ref_attachment),
+            attachment: Attachment::new(attachment),
+            common: Default::default(),
+            technique: Default::default(),
+            extra: Default::default(),
+        }
+    }
+}
+
 impl XNode for RigidConstraint {
     const NAME: &'static str = "rigid_constraint";
     fn parse(element: &Element) -> Result<Self> {
@@ -509,6 +541,16 @@ pub struct InstanceRigidConstraint {
     pub constraint: NameRef<RigidConstraint>,
     /// Provides arbitrary additional information about this element.
     pub extra: Vec<Extra>,
+}
+
+impl InstanceRigidConstraint {
+    /// Construct a new `InstanceRigidConstraint`.
+    pub fn new(constraint: impl Into<String>) -> Self {
+        Self {
+            constraint: Ref::new(constraint.into()),
+            extra: vec![],
+        }
+    }
 }
 
 impl XNode for InstanceRigidConstraint {

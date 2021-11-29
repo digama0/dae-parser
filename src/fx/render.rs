@@ -14,6 +14,17 @@ pub struct Render {
     pub instance_effect: Option<Instance<Effect>>,
 }
 
+impl Render {
+    /// Construct a new render pass.
+    pub fn new(camera_node: Url, layers: Vec<String>, instance_effect: Url) -> Self {
+        Self {
+            camera_node: Ref::new(camera_node),
+            layers,
+            instance_effect: Some(Instance::new(instance_effect)),
+        }
+    }
+}
+
 impl XNode for Render {
     const NAME: &'static str = "render";
     fn parse(element: &Element) -> Result<Self> {
@@ -52,6 +63,30 @@ pub enum Shader {
     /// Produces a specularly shaded surface where the specular reflection is shaded
     /// according the Phong BRDF approximation.
     Phong(Phong),
+}
+
+impl From<Blinn> for Shader {
+    fn from(v: Blinn) -> Self {
+        Self::Blinn(v)
+    }
+}
+
+impl From<ConstantFx> for Shader {
+    fn from(v: ConstantFx) -> Self {
+        Self::Constant(v)
+    }
+}
+
+impl From<Lambert> for Shader {
+    fn from(v: Lambert) -> Self {
+        Self::Lambert(v)
+    }
+}
+
+impl From<Phong> for Shader {
+    fn from(v: Phong) -> Self {
+        Self::Phong(v)
+    }
 }
 
 impl Shader {
@@ -409,6 +444,28 @@ pub(crate) mod private {
     }
 }
 
+impl<T> From<T> for WithSid<T> {
+    fn from(data: T) -> Self {
+        Self::new(data)
+    }
+}
+
+impl<T> WithSid<T> {
+    /// Construct a new `WithSid` with no sid.
+    pub fn new(data: T) -> Self {
+        Self { sid: None, data }
+    }
+
+    /// Construct a new `WithSid` with a sid.
+    #[allow(clippy::self_named_constructors)]
+    pub fn with_sid(sid: impl Into<String>, data: T) -> Self {
+        Self {
+            sid: Some(sid.into()),
+            data,
+        }
+    }
+}
+
 impl<T: CanWithSid> WithSid<T> {
     /// Parse a [`WithSid<T>`] from an XML element.
     pub fn parse(element: &Element) -> Result<Self> {
@@ -447,6 +504,37 @@ pub enum ColorParam {
     Param(Box<str>),
     /// The value is specified by a reference to a previously defined `sampler2D` object.
     Texture(Box<Texture>),
+}
+
+impl From<[f32; 4]> for ColorParam {
+    fn from(rgba: [f32; 4]) -> Self {
+        Self::color(rgba)
+    }
+}
+
+impl From<[f32; 4]> for WithSid<ColorParam> {
+    fn from(rgba: [f32; 4]) -> Self {
+        WithSid::new(rgba.into())
+    }
+}
+
+impl From<Texture> for ColorParam {
+    fn from(tex: Texture) -> Self {
+        Self::Texture(Box::new(tex))
+    }
+}
+
+impl From<Texture> for WithSid<ColorParam> {
+    fn from(tex: Texture) -> Self {
+        WithSid::new(tex.into())
+    }
+}
+
+impl ColorParam {
+    /// Construct a new `ColorParam` from a color.
+    pub fn color(rgba: [f32; 4]) -> Self {
+        Self::Color(Box::new(rgba))
+    }
 }
 
 impl CanWithSid for ColorParam {
@@ -514,6 +602,18 @@ pub enum FloatParam {
     Param(Box<str>),
 }
 
+impl From<f32> for FloatParam {
+    fn from(val: f32) -> Self {
+        Self::Float(val)
+    }
+}
+
+impl From<f32> for WithSid<FloatParam> {
+    fn from(val: f32) -> Self {
+        WithSid::new(val.into())
+    }
+}
+
 impl CanWithSid for FloatParam {
     fn parse(e: &Element) -> Result<Option<Self>> {
         Ok(Some(match e.name() {
@@ -562,6 +662,15 @@ pub struct Texture {
 }
 
 impl Texture {
+    /// Construct a new `Texture` from the mandatory data.
+    pub fn new(texture: impl Into<String>, texcoord: impl Into<String>) -> Self {
+        Self {
+            texture: texture.into(),
+            texcoord: texcoord.into(),
+            extra: None,
+        }
+    }
+
     fn write_with_sid<W: Write>(&self, sid: &Option<String>, w: &mut XWriter<W>) -> Result<()> {
         let mut e = Self::elem();
         e.opt_attr("sid", sid);
