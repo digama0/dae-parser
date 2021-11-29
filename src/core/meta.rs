@@ -1,6 +1,42 @@
 use crate::*;
-use chrono::{DateTime, Local};
+use chrono::{DateTime, FixedOffset, Local};
 
+/// Collada spec says that `created` and `modified` times should follow ISO 8601,
+/// but `chrono` asserts that this means that timezones are required and Blender
+/// doesn't seem to add them. To avoid crashing, we store the unparsed date as a string.
+#[derive(Clone, Debug)]
+pub enum MaybeDateTime {
+    /// A proper ISO 8601 date-time.
+    Ok(DateTime<FixedOffset>),
+    /// A date-time that failed to parse.
+    Error(String),
+}
+
+impl From<DateTime<FixedOffset>> for MaybeDateTime {
+    fn from(v: DateTime<FixedOffset>) -> Self {
+        Self::Ok(v)
+    }
+}
+
+impl FromStr for MaybeDateTime {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s.parse() {
+            Ok(dt) => Self::Ok(dt),
+            Err(_) => Self::Error(s.to_owned()),
+        })
+    }
+}
+
+impl Display for MaybeDateTime {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MaybeDateTime::Ok(dt) => write!(f, "{}", dt.to_rfc3339()),
+            MaybeDateTime::Error(s) => write!(f, "{}", s),
+        }
+    }
+}
 /// Defines asset-management information regarding its parent element.
 #[derive(Clone, Debug)]
 pub struct Asset {
@@ -9,13 +45,13 @@ pub struct Asset {
     /// Contains date and time that the parent element was created.
     /// Represented in an ISO 8601 format as per the XML Schema
     /// `dateTime` primitive type.
-    pub created: DateTime<Local>,
+    pub created: MaybeDateTime,
     /// Contains a list of words used as search criteria for the parent element.
     pub keywords: Vec<String>,
     /// Contains date and time that the parent element was last
     /// modified. Represented in an ISO 8601 format as per the
     /// XML Schema `dateTime` primitive type.
-    pub modified: DateTime<Local>,
+    pub modified: MaybeDateTime,
     /// Contains revision information for the parent element.
     pub revision: Option<String>,
     /// Contains a description of the topical subject of the parent element.
@@ -31,12 +67,12 @@ pub struct Asset {
 impl Asset {
     /// Create a new `Asset` with the given creation and modification dates
     /// and defaulting everything else.
-    pub fn new(created: DateTime<Local>, modified: DateTime<Local>) -> Self {
+    pub fn new(created: DateTime<FixedOffset>, modified: DateTime<FixedOffset>) -> Self {
         Self {
             contributor: Default::default(),
-            created,
+            created: created.into(),
             keywords: Default::default(),
-            modified,
+            modified: modified.into(),
             revision: Default::default(),
             subject: Default::default(),
             title: Default::default(),
@@ -47,7 +83,7 @@ impl Asset {
 
     /// Create a new `Asset` object representing an object created at the current date/time.
     pub fn create_now() -> Self {
-        let now = Local::now();
+        let now = Local::now().into();
         Self::new(now, now)
     }
 }
@@ -83,11 +119,11 @@ impl XNodeWrite for Asset {
     fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
         let e = Self::elem().start(w)?;
         self.contributor.write_to(w)?;
-        ElemBuilder::print_str("created", &self.created.to_rfc3339(), w)?;
+        ElemBuilder::print("created", &self.created, w)?;
         if !self.keywords.is_empty() {
             ElemBuilder::print_arr("keywords", &self.keywords, w)?;
         }
-        ElemBuilder::print_str("modified", &self.modified.to_rfc3339(), w)?;
+        ElemBuilder::print("modified", &self.modified, w)?;
         opt(&self.revision, |e| ElemBuilder::print_str("revision", e, w))?;
         opt(&self.subject, |e| ElemBuilder::print_str("subject", e, w))?;
         opt(&self.title, |e| ElemBuilder::print_str("title", e, w))?;
