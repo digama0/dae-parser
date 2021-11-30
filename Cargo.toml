@@ -1,6 +1,6 @@
 [package]
 name = "dae-parser"
-version = "0.8.1"
+version = "0.8.2"
 authors = ["Mario Carneiro <di.gama@gmail.com>"]
 edition = "2018"
 description = "Parser for the Collada (DAE) format"

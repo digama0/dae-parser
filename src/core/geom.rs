@@ -475,6 +475,14 @@ macro_rules! mk_primitive {
             $($(#[$doc])* $name($name),)*
         }
 
+        $(
+            impl From<$name> for Primitive {
+                fn from(val: $name) -> Self {
+                    Self::$name(val)
+                }
+            }
+        )*
+
         impl Primitive {
             /// Parse a [`Primitive`] from an XML element.
             pub fn parse(e: &Element) -> Result<Option<Self>> {

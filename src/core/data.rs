@@ -100,21 +100,16 @@ macro_rules! mk_arrays {
             }
             impl $tyname {
                 /// Construct a new array element from an array.
-                pub fn new(val: Box<[$ty]>) -> Self {
+                pub fn new(id: impl Into<String>, val: Box<[$ty]>) -> Self {
                     Self {
-                        id: None,
+                        id: Some(id.into()),
                         val,
                     }
                 }
             }
-            impl From<Box<[$ty]>> for $tyname {
-                fn from(val: Box<[$ty]>) -> Self {
-                    Self::new(val)
-                }
-            }
-            impl From<Vec<$ty>> for $tyname {
-                fn from(val: Vec<$ty>) -> Self {
-                    Self::new(val.into())
+            impl From<$tyname> for ArrayElement {
+                fn from(val: $tyname) -> Self {
+                    Self::$name(val)
                 }
             }
             impl Deref for $tyname {
@@ -310,10 +305,18 @@ pub struct Source {
 
 impl Source {
     /// Construct a new `Source` given an inline array and access information.
-    pub fn new_local(id: impl Into<String>, param: Vec<Param>, array: ArrayElement) -> Self {
+    pub fn new_local(
+        id: impl Into<String>,
+        param: Vec<Param>,
+        array: impl Into<ArrayElement>,
+    ) -> Self {
         let id = id.into();
+        let array = array.into();
+        assert!(!param.is_empty());
+        let count = array.len() / param.len();
+        assert!(param.len() * count == array.len());
         Self {
-            accessor: Accessor::new(Url::Fragment(id.clone()), array.len(), param),
+            accessor: Accessor::new(Url::Fragment(id.clone()), count, param),
             id: Some(id),
             name: None,
             asset: None,
