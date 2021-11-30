@@ -316,7 +316,11 @@ impl Source {
         let count = array.len() / param.len();
         assert!(param.len() * count == array.len());
         Self {
-            accessor: Accessor::new(Url::Fragment(id.clone()), count, param),
+            accessor: Accessor::new(
+                Url::Fragment(array.id().expect("array requires id").into()),
+                count,
+                param,
+            ),
             id: Some(id),
             name: None,
             asset: None,
