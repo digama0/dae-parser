@@ -291,13 +291,18 @@ impl Matrix {
     #[cfg(feature = "nalgebra")]
     /// Convert this transformation to a [`nalgebra::Matrix4`].
     pub fn as_matrix(&self) -> Matrix4<f32> {
-        Matrix4::from_column_slice(&*self.0)
+        // We have to transpose the matrix to match nalgebra conventions
+        // on projective transformations
+        Matrix4::from_row_slice(&*self.0)
     }
 }
 
 #[cfg(feature = "nalgebra")]
 impl From<Matrix4<f32>> for Matrix {
-    fn from(mat: Matrix4<f32>) -> Self {
+    fn from(mut mat: Matrix4<f32>) -> Self {
+        // We have to transpose the matrix to match nalgebra conventions
+        // on projective transformations
+        mat.transpose_mut();
         Self(Box::new(mat.as_slice().try_into().expect("impossible")))
     }
 }
@@ -352,7 +357,10 @@ impl Rotate {
     /// Convert this transformation to a [`nalgebra::Matrix4`].
     pub fn as_matrix(&self) -> Matrix4<f32> {
         let axis = Vector3::from_column_slice(self.axis()).normalize();
-        Matrix4::from_axis_angle(&nalgebra::Unit::new_normalize(axis), self.angle())
+        Matrix4::from_axis_angle(
+            &nalgebra::Unit::new_normalize(axis),
+            self.angle().to_radians(),
+        )
     }
 }
 

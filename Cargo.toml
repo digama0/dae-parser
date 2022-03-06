@@ -1,6 +1,6 @@
 [package]
 name = "dae-parser"
-version = "0.8.3"
+version = "0.8.4"
 authors = ["Mario Carneiro <di.gama@gmail.com>"]
 edition = "2018"
 description = "Parser for the Collada (DAE) format"
@@ -16,4 +16,4 @@ ref-cast = "1.0"
 minidom = "0.13"
 percent-encoding = "2.1"
 chrono = "0.4"
-nalgebra = { version = "0.29", optional = true }
+nalgebra = { version = "0.30", optional = true }
