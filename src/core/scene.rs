@@ -92,7 +92,7 @@ impl XNode for VisualScene {
             id: element.attr("id").map(Into::into),
             name: element.attr("name").map(Into::into),
             asset: Asset::parse_opt_box(&mut it)?,
-            nodes: Node::parse_list_n::<1>(&mut it)?,
+            nodes: Node::parse_list(&mut it)?,
             evaluate_scene: EvaluateScene::parse_list(&mut it)?,
             extra: Extra::parse_many(it)?,
         })
