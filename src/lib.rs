@@ -113,7 +113,6 @@ mod fx;
 mod physics;
 mod url;
 
-use crate::api::*;
 use std::convert::{TryFrom, TryInto};
 use std::fmt::{Debug, Display};
 use std::io::{BufRead, BufReader, Write};
