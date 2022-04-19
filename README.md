@@ -4,7 +4,7 @@
 [![crates.io](https://img.shields.io/crates/v/dae-parser.svg)](https://crates.io/crates/dae-parser)
 [![Download numbers](https://img.shields.io/crates/d/dae-parser.svg)](https://crates.io/crates/dae-parser)
 [![Github CI](https://github.com/digama0/dae-parser/workflows/Continuous%20integration/badge.svg)](https://github.com/digama0/dae-parser/actions)
-[![Minimum rustc version](https://img.shields.io/badge/rustc-1.51.0+-lightgray.svg)](#rust-version-requirements)
+[![Minimum rustc version](https://img.shields.io/badge/rustc-1.52.1+-lightgray.svg)](#rust-version-requirements)
 
 <!-- cargo-sync-readme start -->
 
