@@ -23,8 +23,7 @@
 //! use std::str::FromStr;
 //! use dae_parser::*;
 //!
-//! let dae_file = r##"\
-//! <?xml version="1.0" encoding="utf-8"?>
+//! let dae_file = r##"<?xml version="1.0" encoding="utf-8"?>
 //! <COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1">
 //!   <asset>
 //!     <created>1970-01-01T00:00:00Z</created>
