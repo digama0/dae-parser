@@ -49,8 +49,10 @@ impl XNodeWrite for Extra {
 }
 
 impl Extra {
-    pub(crate) fn parse_many<'a>(it: impl Iterator<Item = &'a Element>) -> Result<Vec<Extra>> {
-        let mut extras = vec![];
+    pub(crate) fn parse_append_many<'a>(
+        mut extras: Vec<Extra>,
+        it: impl Iterator<Item = &'a Element>,
+    ) -> Result<Vec<Extra>> {
         for e in it {
             match e.name() {
                 "extra" => extras.push(Extra::parse(e)?),
@@ -58,6 +60,10 @@ impl Extra {
             }
         }
         Ok(extras)
+    }
+
+    pub(crate) fn parse_many<'a>(it: impl Iterator<Item = &'a Element>) -> Result<Vec<Extra>> {
+        Self::parse_append_many(vec![], it)
     }
 }
 

@@ -156,6 +156,7 @@ impl XNode for Node {
     fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();
+        let extra;
         Ok(Node {
             id: element.attr("id").map(Into::into),
             name: element.attr("name").map(Into::into),
@@ -171,8 +172,14 @@ impl XNode for Node {
             instance_geometry: Instance::parse_list(&mut it)?,
             instance_light: Instance::parse_list(&mut it)?,
             instance_node: Instance::parse_list(&mut it)?,
-            children: Node::parse_list(&mut it)?,
-            extra: Extra::parse_many(it)?,
+            children: {
+                // Note: this is nonconforming, COLLADA spec says `extra` should come
+                // after `children`.
+                // However FBX Collada exporter has been witnessed producing such files
+                extra = Extra::parse_list(&mut it)?;
+                Node::parse_list(&mut it)?
+            },
+            extra: Extra::parse_append_many(extra, it)?,
         })
     }
 }
