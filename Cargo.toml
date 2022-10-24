@@ -9,7 +9,7 @@ readme = "README.md"
 license = "MIT OR Apache-2.0"
 keywords = ["collada", "3d", "format"]
 categories = ["parser-implementations", "graphics", "game-development"]
-metadata = { msrv = "1.52.1" }
+metadata = { msrv = "1.61.0" }
 
 [dependencies]
 ref-cast = "1.0"
