@@ -37,9 +37,11 @@ impl XNode for Animation {
             channel: Channel::parse_list(&mut it)?,
             extra: Extra::parse_many(it)?,
         };
-        if res.children.is_empty() && res.sampler.is_empty() {
-            return Err("animation: no sampler/channel or children".into());
-        }
+        // Note: blender will produce empty animation containers,
+        // and the spec even has examples of such, so this constraint seems bogus
+        // if res.children.is_empty() && res.sampler.is_empty() {
+        //     return Err("animation: no sampler/channel or children".into());
+        // }
         if res.sampler.is_empty() != res.channel.is_empty() {
             return Err("animation: sampler and channel must be used together".into());
         }
