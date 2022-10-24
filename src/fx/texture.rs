@@ -508,7 +508,7 @@ impl XNode for Surface {
 impl XNodeWrite for Surface {
     fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
         let mut e = Self::elem();
-        e.print_attr("type", &self.ty);
+        e.print_attr("type", self.ty);
         let e = e.start(w)?;
         self.init.write_to(w)?;
         opt(&self.format, |e| ElemBuilder::print_str("format", e, w))?;

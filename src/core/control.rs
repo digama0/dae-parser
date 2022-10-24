@@ -247,7 +247,7 @@ impl XNodeWrite for Morph {
     fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
         let mut e = Self::elem();
         e.print_attr("source", &self.source);
-        e.print_attr("method", &self.method);
+        e.print_attr("method", self.method);
         let e = e.start(w)?;
         self.sources.write_to(w)?;
         self.targets.write_to(w)?;
@@ -506,7 +506,7 @@ impl XNode for VertexWeights {
 impl XNodeWrite for VertexWeights {
     fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
         let mut e = Self::elem();
-        e.print_attr("count", &self.count);
+        e.print_attr("count", self.count);
         let e = e.start(w)?;
         self.inputs.write_to(w)?;
         ElemBuilder::print_arr("vcount", &self.vcount, w)?;

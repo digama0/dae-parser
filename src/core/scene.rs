@@ -153,7 +153,6 @@ pub struct Node {
 
 impl XNode for Node {
     const NAME: &'static str = "node";
-    #[allow(clippy::eval_order_dependence)]
     fn parse(element: &Element) -> Result<Self> {
         debug_assert_eq!(element.name(), Self::NAME);
         let mut it = element.children().peekable();

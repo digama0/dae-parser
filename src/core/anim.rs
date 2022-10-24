@@ -158,7 +158,7 @@ impl XNodeWrite for AnimationClip {
         let mut e = Self::elem();
         e.opt_attr("id", &self.id);
         e.opt_attr("name", &self.name);
-        e.print_attr("start", &self.start);
+        e.print_attr("start", self.start);
         e.opt_print_attr("end", &self.end);
         let e = e.start(w)?;
         self.asset.write_to(w)?;

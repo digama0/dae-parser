@@ -55,7 +55,7 @@ impl XNodeWrite for Accessor {
     fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
         let mut e = Self::elem();
         e.print_attr("source", &self.source);
-        e.print_attr("count", &self.count);
+        e.print_attr("count", self.count);
         e.def_print_attr("offset", self.offset, 0);
         e.def_print_attr("stride", self.stride, 1);
         let e = e.start(w)?;
@@ -510,7 +510,7 @@ impl XNodeWrite for InputS {
         let mut e = Self::elem();
         e.print_attr("semantic", &self.semantic);
         e.print_attr("source", &self.source);
-        e.print_attr("offset", &self.offset);
+        e.print_attr("offset", self.offset);
         e.opt_print_attr("set", &self.set);
         e.end(w)
     }

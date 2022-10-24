@@ -87,12 +87,7 @@ impl Effect {
 
     /// Get a parameter of the effect by name.
     pub fn get_param(&self, sid: &str) -> Option<&NewParam> {
-        for p in self.new_param.iter().rev() {
-            if p.sid == sid {
-                return Some(p);
-            }
-        }
-        None
+        self.new_param.iter().rev().find(|p| p.sid == sid)
     }
 }
 

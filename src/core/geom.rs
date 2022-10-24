@@ -458,7 +458,7 @@ impl<T: ParseGeom> XNodeWrite for Geom<T> {
         let mut e = Self::elem();
         e.opt_attr("name", &self.name);
         e.opt_attr("material", &self.material);
-        e.print_attr("count", &self.count);
+        e.print_attr("count", self.count);
         let e = e.start(w)?;
         self.inputs.write_to(w)?;
         self.data.write_to(w)?;
