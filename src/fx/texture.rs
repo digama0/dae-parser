@@ -176,7 +176,7 @@ impl XNodeWrite for ImageSource {
                     }
                     indent = true;
                     for &c in chunk {
-                        write!(w.inner(), "{:x}", c)?
+                        write!(w.get_mut(), "{:x}", c)?
                     }
                 }
                 e.end(w)
