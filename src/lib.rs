@@ -299,7 +299,7 @@ fn parse_list_many<'a, T>(
 }
 
 fn print_str(s: &str, w: &mut XWriter<impl Write>) -> Result<()> {
-    Ok(w.write_event(Event::Text(BytesText::from_plain(s.as_bytes())))?)
+    Ok(w.write_event(Event::Text(BytesText::new(s)))?)
 }
 
 fn print_elem<T: Display>(elem: &T, w: &mut XWriter<impl Write>) -> Result<()> {
@@ -341,7 +341,7 @@ struct ElemEnd<'a>(BytesEnd<'a>);
 impl<'a> ElemBuilder<'a> {
     #[inline]
     fn new(name: &'a str) -> Self {
-        Self(BytesStart::borrowed_name(name.as_bytes()))
+        Self(BytesStart::new(name))
     }
 
     fn print_str(name: &'a str, elem: &str, w: &mut XWriter<impl Write>) -> Result<()> {
@@ -644,7 +644,7 @@ impl XNode for Document {
 
 impl XNodeWrite for Document {
     fn write_to<W: Write>(&self, w: &mut XWriter<W>) -> Result<()> {
-        w.write_event(Event::Decl(BytesDecl::new(b"1.0", Some(b"utf-8"), None)))?;
+        w.write_event(Event::Decl(BytesDecl::new("1.0", Some("utf-8"), None)))?;
         let mut e = Self::elem();
         e.raw_attr("xmlns", b"http://www.collada.org/2005/11/COLLADASchema");
         e.raw_attr("version", b"1.4.1");
