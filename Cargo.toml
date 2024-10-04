@@ -1,6 +1,6 @@
 [package]
 name = "dae-parser"
-version = "0.10.0"
+version = "0.11.0"
 authors = ["Mario Carneiro <di.gama@gmail.com>"]
 edition = "2018"
 description = "Parser for the Collada (DAE) format"
@@ -9,11 +9,11 @@ readme = "README.md"
 license = "MIT OR Apache-2.0"
 keywords = ["collada", "3d", "format"]
 categories = ["parser-implementations", "graphics", "game-development"]
-metadata = { msrv = "1.61.0" }
+metadata = { msrv = "1.66.1" }
 
 [dependencies]
 ref-cast = "1.0"
-minidom-14 = "0.16"
+minidom-14 = "0.17"
 percent-encoding = "2.2"
 chrono = "0.4"
-nalgebra = { version = "0.32", optional = true }
+nalgebra = { version = "0.33", optional = true }

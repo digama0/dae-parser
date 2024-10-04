@@ -521,7 +521,7 @@ impl XNodeWrite for Element {
         use std::{cell::RefCell, collections::BTreeMap};
         thread_local! {
             static COLLADA_PREFIX: RefCell<BTreeMap<Option<String>, String>> =
-                RefCell::new(BTreeMap::new());
+                const { RefCell::new(BTreeMap::new()) };
         }
         COLLADA_PREFIX.with(|pfxs| {
             let mut pfxs = pfxs.borrow_mut();
@@ -612,7 +612,7 @@ impl Document {
     /// Constructs a [`Document`] from a
     /// [`quick_xml::Reader`](minidom::quick_xml::Reader).
     pub fn from_xml_reader<R: BufRead>(reader: &mut XReader<R>) -> Result<Self> {
-        let root = minidom::Element::from_reader(reader)?;
+        let root = Element::from_reader(reader)?;
         Self::parse(&root)
     }
 
