@@ -1,7 +1,7 @@
 use crate::*;
 
 /// Provides arbitrary additional information about or related to its parent element.
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, PartialEq)]
 pub struct Extra {
     /// The unique identifier of the `Extra` element.
     /// This value must be unique within the document.
@@ -70,7 +70,7 @@ impl Extra {
 /// Declares the information used to process some portion of the content.
 /// Each technique conforms to an associated profile.
 /// In the COLLADA spec, this element is called "`<technique>` (core)".
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Technique {
     /// The `<technique>` element can contain any well-formed XML data.
     pub element: Element,
