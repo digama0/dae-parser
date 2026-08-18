@@ -126,13 +126,54 @@ impl XNodeWrite for Shader {
     }
 }
 
-/// Defines how transparency is read from the color parameter of a `<transparent>`
-/// element in profile_COMMON shaders.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Specifies from which channel to take transparency information.
+/// This is the `opaque` attribute of the `<transparent>` element, which is the only
+/// element of type `common_color_or_texture_type` to have an attribute.
+///
+/// If either `<transparent>` or `<transparency>` exists then transparency rendering is
+/// activated, the renderer needs to turn on alpha blending mode, and the equations given on the
+/// individual variants define how to combine the two values. Use these equations to get the
+/// correct results based on the opaque setting of `<transparent>`, where `fb` is the frame
+/// buffer (that is, the image behind what is being rendered) and `mat` is the material color
+/// before the transparency calculation.
+///
+/// The interaction between `<transparent>` and `<transparency>` is as follows:
+/// * If `<transparent>` does not exist then it has no effect on the equation's result, and the
+///   opaque mode is the default opaque mode. This is equivalent to:
+///   `transparent = <color> 1.0 1.0 1.0 1.0 </color>`
+/// * If `<transparency>` does not exist then it has no effect on the equation's result. This is
+///   equivalent to a factor that is 1.0: `transparency = <float> 1.0 </float>`
+/// * If both `<transparent>` and `<transparency>` exist then both are honored.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum TransparencyMode {
-    /// Transparency is determined from the alpha channel of the color.
+    /// Takes the transparency information from the color's alpha channel,
+    /// where the value 1.0 is opaque. This is the default.
+    ///
+    /// ```text
+    /// result.r = fb.r * (1.0f - transparent.a * transparency) + mat.r * (transparent.a * transparency)
+    /// result.g = fb.g * (1.0f - transparent.a * transparency) + mat.g * (transparent.a * transparency)
+    /// result.b = fb.b * (1.0f - transparent.a * transparency) + mat.b * (transparent.a * transparency)
+    /// result.a = fb.a * (1.0f - transparent.a * transparency) + mat.a * (transparent.a * transparency)
+    /// ```
+    #[default]
     AOne,
-    /// Transparency is determined from the RGB channels of the color.
+    /// Takes the transparency information from the color's red, green, and blue channels,
+    /// where the value 0.0 is opaque, with each channel modulated independently.
+    ///
+    /// ```text
+    /// result.r = fb.r * (transparent.r * transparency) + mat.r * (1.0f - transparent.r * transparency)
+    /// result.g = fb.g * (transparent.g * transparency) + mat.g * (1.0f - transparent.g * transparency)
+    /// result.b = fb.b * (transparent.b * transparency) + mat.b * (1.0f - transparent.b * transparency)
+    /// result.a = fb.a * (luminance(transparent.rgb) * transparency)
+    ///          + mat.a * (1.0f - luminance(transparent.rgb) * transparency)
+    /// ```
+    ///
+    /// where `luminance` is the function, based on the ISO/CIE color standards
+    /// (see ITU-R Recommendation BT.709-4), that averages the color channels into one value:
+    ///
+    /// ```text
+    /// luminance = (color.r * 0.212671) + (color.g * 0.715160) + (color.b * 0.072169)
+    /// ```
     RgbZero,
 }
 
@@ -164,21 +205,24 @@ impl Display for TransparencyMode {
     }
 }
 
-fn parse_opt_transparency_mode(it: &mut ElementIter<'_>) -> Result<Option<TransparencyMode>> {
-    match it.peek() {
-        Some(e) if e.name() == "transparent" => parse_attr(e.attr("opaque")),
-        _ => Ok(None),
-    }
+/// Parse the `opaque` attribute off the upcoming `<transparent>` element, if there is one,
+/// without consuming it. Absent `<transparent>` and absent attribute both yield the default.
+fn parse_transparency_mode(it: &mut ElementIter<'_>) -> Result<TransparencyMode> {
+    let mode = match it.peek() {
+        Some(e) if e.name() == "transparent" => parse_attr(e.attr("opaque"))?,
+        _ => None,
+    };
+    Ok(mode.unwrap_or_default())
 }
 
 fn write_transparent_opt(
     transparent: &Option<WithSid<ColorParam>>,
-    transparency_mode: &Option<TransparencyMode>,
+    transparency_mode: TransparencyMode,
     w: &mut XWriter<impl Write>,
 ) -> Result<()> {
     opt(transparent, |param| {
         let mut elem = ElemBuilder::new("transparent");
-        elem.opt_print_attr("opaque", transparency_mode);
+        elem.def_print_attr("opaque", transparency_mode, Default::default());
         let elem = elem.start(w)?;
         param.write_to(w)?;
         elem.end(w)
@@ -203,9 +247,10 @@ pub struct Blinn {
     /// Declares the amount of perfect mirror reflection to be added
     /// to the reflected light as a value between 0.0 and 1.0.
     pub reflectivity: Option<WithSid<FloatParam>>,
-    /// Defines how transparency is read from the [`transparent`] color parameter.
-    /// When absent, the COLLADA default is [`TransparencyMode::AOne`].
-    pub transparency_mode: Option<TransparencyMode>,
+    /// Specifies from which channel to take transparency information,
+    /// for the [`transparent`](Self::transparent) color parameter.
+    /// The default is [`TransparencyMode::AOne`].
+    pub transparency_mode: TransparencyMode,
     /// Declares the color of perfectly refracted light.
     pub transparent: Option<WithSid<ColorParam>>,
     /// Declares the amount of perfectly refracted light added
@@ -229,7 +274,7 @@ impl XNode for Blinn {
             shininess: parse_opt("shininess", &mut it, WithSid::parse)?,
             reflective: parse_opt("reflective", &mut it, WithSid::parse)?,
             reflectivity: parse_opt("reflectivity", &mut it, WithSid::parse)?,
-            transparency_mode: parse_opt_transparency_mode(&mut it)?,
+            transparency_mode: parse_transparency_mode(&mut it)?,
             transparent: parse_opt("transparent", &mut it, WithSid::parse)?,
             transparency: parse_opt("transparency", &mut it, WithSid::parse)?,
             index_of_refraction: parse_opt("index_of_refraction", &mut it, WithSid::parse)?,
@@ -247,7 +292,7 @@ impl XNodeWrite for Blinn {
         WithSid::write_opt(&self.shininess, "shininess", w)?;
         WithSid::write_opt(&self.reflective, "reflective", w)?;
         WithSid::write_opt(&self.reflectivity, "reflectivity", w)?;
-        write_transparent_opt(&self.transparent, &self.transparency_mode, w)?;
+        write_transparent_opt(&self.transparent, self.transparency_mode, w)?;
         WithSid::write_opt(&self.transparency, "transparency", w)?;
         WithSid::write_opt(&self.index_of_refraction, "index_of_refraction", w)?;
         e.end(w)
@@ -279,9 +324,10 @@ pub struct ConstantFx {
     /// Declares the amount of perfect mirror reflection to be added
     /// to the reflected light as a value between 0.0 and 1.0.
     pub reflectivity: Option<WithSid<FloatParam>>,
-    /// Defines how transparency is read from the [`transparent`] color parameter.
-    /// When absent, the COLLADA default is [`TransparencyMode::AOne`].
-    pub transparency_mode: Option<TransparencyMode>,
+    /// Specifies from which channel to take transparency information,
+    /// for the [`transparent`](Self::transparent) color parameter.
+    /// The default is [`TransparencyMode::AOne`].
+    pub transparency_mode: TransparencyMode,
     /// Declares the color of perfectly refracted light.
     pub transparent: Option<WithSid<ColorParam>>,
     /// Declares the amount of perfectly refracted light added
@@ -301,7 +347,7 @@ impl XNode for ConstantFx {
             emission: parse_opt("emission", &mut it, WithSid::parse)?,
             reflective: parse_opt("reflective", &mut it, WithSid::parse)?,
             reflectivity: parse_opt("reflectivity", &mut it, WithSid::parse)?,
-            transparency_mode: parse_opt_transparency_mode(&mut it)?,
+            transparency_mode: parse_transparency_mode(&mut it)?,
             transparent: parse_opt("transparent", &mut it, WithSid::parse)?,
             transparency: parse_opt("transparency", &mut it, WithSid::parse)?,
             index_of_refraction: parse_opt("index_of_refraction", &mut it, WithSid::parse)?,
@@ -315,7 +361,7 @@ impl XNodeWrite for ConstantFx {
         WithSid::write_opt(&self.emission, "emission", w)?;
         WithSid::write_opt(&self.reflective, "reflective", w)?;
         WithSid::write_opt(&self.reflectivity, "reflectivity", w)?;
-        write_transparent_opt(&self.transparent, &self.transparency_mode, w)?;
+        write_transparent_opt(&self.transparent, self.transparency_mode, w)?;
         WithSid::write_opt(&self.transparency, "transparency", w)?;
         WithSid::write_opt(&self.index_of_refraction, "index_of_refraction", w)?;
         e.end(w)
@@ -348,9 +394,10 @@ pub struct Lambert {
     /// Declares the amount of perfect mirror reflection to be added
     /// to the reflected light as a value between 0.0 and 1.0.
     pub reflectivity: Option<WithSid<FloatParam>>,
-    /// Defines how transparency is read from the [`transparent`] color parameter.
-    /// When absent, the COLLADA default is [`TransparencyMode::AOne`].
-    pub transparency_mode: Option<TransparencyMode>,
+    /// Specifies from which channel to take transparency information,
+    /// for the [`transparent`](Self::transparent) color parameter.
+    /// The default is [`TransparencyMode::AOne`].
+    pub transparency_mode: TransparencyMode,
     /// Declares the color of perfectly refracted light.
     pub transparent: Option<WithSid<ColorParam>>,
     /// Declares the amount of perfectly refracted light added
@@ -372,7 +419,7 @@ impl XNode for Lambert {
             diffuse: parse_opt("diffuse", &mut it, WithSid::parse)?,
             reflective: parse_opt("reflective", &mut it, WithSid::parse)?,
             reflectivity: parse_opt("reflectivity", &mut it, WithSid::parse)?,
-            transparency_mode: parse_opt_transparency_mode(&mut it)?,
+            transparency_mode: parse_transparency_mode(&mut it)?,
             transparent: parse_opt("transparent", &mut it, WithSid::parse)?,
             transparency: parse_opt("transparency", &mut it, WithSid::parse)?,
             index_of_refraction: parse_opt("index_of_refraction", &mut it, WithSid::parse)?,
@@ -388,7 +435,7 @@ impl XNodeWrite for Lambert {
         WithSid::write_opt(&self.diffuse, "diffuse", w)?;
         WithSid::write_opt(&self.reflective, "reflective", w)?;
         WithSid::write_opt(&self.reflectivity, "reflectivity", w)?;
-        write_transparent_opt(&self.transparent, &self.transparency_mode, w)?;
+        write_transparent_opt(&self.transparent, self.transparency_mode, w)?;
         WithSid::write_opt(&self.transparency, "transparency", w)?;
         WithSid::write_opt(&self.index_of_refraction, "index_of_refraction", w)?;
         e.end(w)
@@ -428,9 +475,10 @@ pub struct Phong {
     /// Declares the amount of perfect mirror reflection to be added
     /// to the reflected light as a value between 0.0 and 1.0.
     pub reflectivity: Option<WithSid<FloatParam>>,
-    /// Defines how transparency is read from the [`transparent`] color parameter.
-    /// When absent, the COLLADA default is [`TransparencyMode::AOne`].
-    pub transparency_mode: Option<TransparencyMode>,
+    /// Specifies from which channel to take transparency information,
+    /// for the [`transparent`](Self::transparent) color parameter.
+    /// The default is [`TransparencyMode::AOne`].
+    pub transparency_mode: TransparencyMode,
     /// Declares the color of perfectly refracted light.
     pub transparent: Option<WithSid<ColorParam>>,
     /// Declares the amount of perfectly refracted light added
@@ -454,7 +502,7 @@ impl XNode for Phong {
             shininess: parse_opt("shininess", &mut it, WithSid::parse)?,
             reflective: parse_opt("reflective", &mut it, WithSid::parse)?,
             reflectivity: parse_opt("reflectivity", &mut it, WithSid::parse)?,
-            transparency_mode: parse_opt_transparency_mode(&mut it)?,
+            transparency_mode: parse_transparency_mode(&mut it)?,
             transparent: parse_opt("transparent", &mut it, WithSid::parse)?,
             transparency: parse_opt("transparency", &mut it, WithSid::parse)?,
             index_of_refraction: parse_opt("index_of_refraction", &mut it, WithSid::parse)?,
@@ -472,7 +520,7 @@ impl XNodeWrite for Phong {
         WithSid::write_opt(&self.shininess, "shininess", w)?;
         WithSid::write_opt(&self.reflective, "reflective", w)?;
         WithSid::write_opt(&self.reflectivity, "reflectivity", w)?;
-        write_transparent_opt(&self.transparent, &self.transparency_mode, w)?;
+        write_transparent_opt(&self.transparent, self.transparency_mode, w)?;
         WithSid::write_opt(&self.transparency, "transparency", w)?;
         WithSid::write_opt(&self.index_of_refraction, "index_of_refraction", w)?;
         e.end(w)
@@ -807,19 +855,54 @@ mod tests {
     use super::*;
     use std::io::Cursor;
 
+    fn parse_phong(xml: &str) -> Phong {
+        let mut reader = XReader::from_reader(Cursor::new(xml.as_bytes()));
+        Phong::parse(&Element::from_reader(&mut reader).unwrap()).unwrap()
+    }
+
+    fn write_phong(phong: &Phong) -> String {
+        let mut w = XWriter::new(Vec::new());
+        phong.write_to(&mut w).unwrap();
+        String::from_utf8(w.into_inner()).unwrap()
+    }
+
     #[test]
     fn transparent_parsing() {
-        let xml = r#"<phong xmlns="http://www.collada.org/2005/11/COLLADASchema">
-          <transparent opaque="RGB_ZERO"><color>1 0 0 1</color></transparent>
-        </phong>"#;
-        let phong = Phong::parse(
-            &Element::from_reader(&mut XReader::from_reader(Cursor::new(xml.as_bytes()))).unwrap(),
-        )
-        .unwrap();
-        assert_eq!(phong.transparency_mode, Some(TransparencyMode::RgbZero));
+        let phong = parse_phong(
+            r#"<phong xmlns="http://www.collada.org/2005/11/COLLADASchema">
+              <transparent opaque="RGB_ZERO"><color sid="tc">1 0 0 1</color></transparent>
+            </phong>"#,
+        );
+        assert_eq!(phong.transparency_mode, TransparencyMode::RgbZero);
         assert_eq!(
             phong.transparent,
-            Some(WithSid::new(ColorParam::Color(Box::new([1.0, 0.0, 0.0, 1.0]))))
+            Some(WithSid::with_sid(
+                "tc",
+                ColorParam::Color(Box::new([1.0, 0.0, 0.0, 1.0]))
+            ))
+        );
+        assert_eq!(
+            write_phong(&phong),
+            r#"<phong><transparent opaque="RGB_ZERO"><color sid="tc">1 0 0 1</color></transparent></phong>"#
+        );
+    }
+
+    #[test]
+    fn transparent_default_mode() {
+        // The default is A_ONE, both when `<transparent>` is absent...
+        let phong = parse_phong(r#"<phong xmlns="http://www.collada.org/2005/11/COLLADASchema"/>"#);
+        assert_eq!(phong.transparency_mode, TransparencyMode::AOne);
+        // ... and when it is present without an `opaque` attribute.
+        let phong = parse_phong(
+            r#"<phong xmlns="http://www.collada.org/2005/11/COLLADASchema">
+              <transparent><color>1 0 0 1</color></transparent>
+            </phong>"#,
+        );
+        assert_eq!(phong.transparency_mode, TransparencyMode::AOne);
+        // The default is not written back out, as for other defaulted attributes.
+        assert_eq!(
+            write_phong(&phong),
+            r#"<phong><transparent><color>1 0 0 1</color></transparent></phong>"#
         );
     }
 }
