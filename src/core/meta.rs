@@ -4,7 +4,7 @@ use chrono::{DateTime, FixedOffset, Local};
 /// Collada spec says that `created` and `modified` times should follow ISO 8601,
 /// but `chrono` asserts that this means that timezones are required and Blender
 /// doesn't seem to add them. To avoid crashing, we store the unparsed date as a string.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum MaybeDateTime {
     /// A proper ISO 8601 date-time.
     Ok(DateTime<FixedOffset>),
@@ -38,7 +38,7 @@ impl Display for MaybeDateTime {
     }
 }
 /// Defines asset-management information regarding its parent element.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Asset {
     /// Defines data related to a contributor that worked on the parent element.
     pub contributor: Vec<Contributor>,
@@ -138,7 +138,7 @@ impl XNodeWrite for Asset {
 }
 
 /// Defines authoring information for asset management.
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, PartialEq)]
 pub struct Contributor {
     /// The author’s name
     pub author: Option<String>,
