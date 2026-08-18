@@ -283,10 +283,11 @@ impl XNodeWrite for Sampler2D {
 
 /// Wrap modes that affect the interpretation of `s`, `t`, and `p` texture coordinates in `Sampler*`
 /// elements.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum WrapMode {
     /// OpenGL symbol `GL_REPEAT`.
     /// Ignores the integer part of texture coordinates, using only the fractional part.
+    #[default]
     Wrap,
     /// OpenGL symbol `GL_MIRRORED_REPEAT`.
     /// First mirrors the texture coordinate.
@@ -312,12 +313,6 @@ pub enum WrapMode {
     /// decal texturing where the border is black. Mapping
     /// this calculation to `GL_CLAMP_TO_BORDER` is the best approximation of this.
     None,
-}
-
-impl Default for WrapMode {
-    fn default() -> Self {
-        Self::Wrap
-    }
 }
 
 impl FromStr for WrapMode {
@@ -357,7 +352,9 @@ impl Display for WrapMode {
 /// (Undocumented?) Enumerated type `fx_sampler_filter_common` from COLLADA spec.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[allow(missing_docs)]
+#[derive(Default)]
 pub enum SamplerFilter {
+    #[default]
     None,
     Nearest,
     Linear,
@@ -365,12 +362,6 @@ pub enum SamplerFilter {
     LinearMipmapNearest,
     NearestMipmapLinear,
     LinearMipmapLinear,
-}
-
-impl Default for SamplerFilter {
-    fn default() -> Self {
-        Self::None
-    }
 }
 
 impl FromStr for SamplerFilter {
@@ -525,7 +516,7 @@ impl XNodeWrite for Surface {
 }
 
 /// Specifies a surface on a cube.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum SurfaceType {
     /// When a surface’s type attribute is set to `Untyped`,
     /// its type is initially unknown and established later by the context in which
@@ -535,6 +526,7 @@ pub enum SurfaceType {
     /// If there is a type mismatch between a [`EffectSetParam`] operation and
     /// what the run-time decides the type should be, the result is profile- and
     /// platform-specific behavior.
+    #[default]
     Untyped,
     /// A one dimensional texture.
     _1D,
@@ -548,12 +540,6 @@ pub enum SurfaceType {
     Cube,
     /// A depth map.
     Depth,
-}
-
-impl Default for SurfaceType {
-    fn default() -> Self {
-        Self::Untyped
-    }
 }
 
 impl FromStr for SurfaceType {
@@ -748,9 +734,10 @@ impl XNodeWrite for SurfaceInit {
 }
 
 /// Specifies a surface on a cube.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum SurfaceFace {
     /// The `+x` face
+    #[default]
     PosX,
     /// The `-x` face
     NegX,
@@ -762,12 +749,6 @@ pub enum SurfaceFace {
     PosZ,
     /// The `-z` face
     NegZ,
-}
-
-impl Default for SurfaceFace {
-    fn default() -> Self {
-        Self::PosX
-    }
 }
 
 impl FromStr for SurfaceFace {

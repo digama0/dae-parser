@@ -316,18 +316,13 @@ impl Node {
 }
 
 /// The type of a [`Node`] element.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum NodeType {
     /// A regular node.
+    #[default]
     Node,
     /// A joint. See [`Joints`].
     Joint,
-}
-
-impl Default for NodeType {
-    fn default() -> Self {
-        Self::Node
-    }
 }
 
 impl FromStr for NodeType {

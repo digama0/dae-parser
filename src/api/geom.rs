@@ -204,7 +204,7 @@ impl<'a> Importer<'a> {
         let mut importer = self.vimp.texcoord_importer();
         for inst in &self.insts {
             if let Instruction::TexCoord(imp, i) = &inst.1 {
-                if i.map_or(true, |i| i == set) {
+                if i.is_none_or(|i| i == set) {
                     importer = Some(imp)
                 }
             }

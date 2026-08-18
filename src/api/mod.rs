@@ -120,11 +120,7 @@ impl<'a, T: ParseLibrary + 'a> Iterator for ItemIter<'a, T> {
             if let Some(e) = self.item.next() {
                 return Some(e);
             }
-            if let Some(lib) = self.iter.next() {
-                self.item = lib.items.iter();
-            } else {
-                return None;
-            }
+            self.item = self.iter.next()?.items.iter();
         }
     }
 }

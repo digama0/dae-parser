@@ -257,24 +257,19 @@ impl XNodeWrite for Morph {
 }
 
 /// Which blending technique to use.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum MorphMethod {
     /// ```text
     /// (Target1, Target2, ...)*(w1, w2, ...) =
     ///     (1-w1-w2-...)*BaseMesh + w1*Target1 + w2*Target2 + ...
     /// ```
+    #[default]
     Normalized,
     /// ```text
     /// (Target1, Target2, ...) + (w1, w2, ...) =
     ///     BaseMesh + w1*Target1 + w2*Target2 + ...
     /// ```
     Relative,
-}
-
-impl Default for MorphMethod {
-    fn default() -> Self {
-        Self::Normalized
-    }
 }
 
 impl FromStr for MorphMethod {

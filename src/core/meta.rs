@@ -258,20 +258,15 @@ impl XNodeWrite for Unit {
 
 /// Descriptive information about the coordinate system of the geometric data.
 /// All coordinates are right-handed by definition.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum UpAxis {
     /// Right: `-y`, Up: `+x`, In: `+z`
     XUp,
     /// Right: `+x`, Up: `+y`, In: `+z`
+    #[default]
     YUp,
     /// Right: `+x`, Up: `+z`, In: `-y`
     ZUp,
-}
-
-impl Default for UpAxis {
-    fn default() -> Self {
-        Self::YUp
-    }
 }
 
 impl UpAxis {

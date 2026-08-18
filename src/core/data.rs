@@ -552,7 +552,7 @@ impl InputList {
     }
 
     pub(crate) fn check_prim<const MIN: usize>(&self, data: &[u32]) -> bool {
-        self.stride != 0 && data.len() < self.stride * MIN && data.len() % self.stride == 0
+        self.stride != 0 && data.len() < self.stride * MIN && data.len().is_multiple_of(self.stride)
     }
 }
 
